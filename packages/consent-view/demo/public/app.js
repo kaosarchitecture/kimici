@@ -95,9 +95,16 @@ function render(state) {
     $("pc-request").className = "";
     $("pc-request").textContent = `AI şunu istiyor: ${state.request.purpose}`;
     if ($("field-form").hidden) renderFields(state.request);
-  } else if (!state.request) {
+  } else if (state.status === "ready" || state.status === "granted") {
+    $("pc-request").className = "";
+    $("pc-request").textContent = `Onaylandı: ${state.request?.purpose ?? ""}`;
+  } else {
     $("pc-request").className = "empty";
-    $("pc-request").textContent = "Henüz izin isteği yok.";
+    $("pc-request").textContent = state.status === "denied"
+      ? "Kullanıcı reddetti."
+      : state.status === "revoked"
+        ? "Görünüm kapatıldı."
+        : "Henüz izin isteği yok.";
     renderFields(null);
   }
   renderView(state);
