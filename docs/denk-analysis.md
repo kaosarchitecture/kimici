@@ -71,8 +71,9 @@ bilmediğimiz kolonları da o şirkette nasıl doluysa öyle doluyor.
 
 ### 3.2 Banka ekstresi: üç aylık dönem (Şirket B)
 
-Log ve audit raporu: ayda **tek** DEK fişi, fiş tarihi ayın son günü, satırlar kendi
-tarihinde ve kronolojik, 3 fiş, mizan her ay denk.
+Log ve audit raporu: ayda **tek** DEK fişi, fiş tarihi (`MUHFISTAR`) ayın son günü,
+satır tarihleri (`MUHHARTAR`, `MUHHAREVRAKTAR`) işlemin kendi tarih ve saati, kronolojik.
+3 fiş, mizan her ay denk. Satırlara ayın son günü basılmaz.
 
 **Kritik tutarsızlık:** Arşivde bu işlemin kodu diye saklanan script (iki klasörde aynı
 dosya, md5 eşit) bunu **yapmıyor**. Kod hareketleri `tarih + işlem no` ile grupluyor, her

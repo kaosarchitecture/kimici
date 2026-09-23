@@ -1,10 +1,15 @@
 import { rootAccount } from "../accounts.ts";
 import { fitCp1254 } from "../cp1254.ts";
+import { combineDateAndTime, compareCivil, datePart, lastDayOfMonth, monthPrefix } from "../datetime.ts";
 import type { Kurus } from "../money.ts";
-import type { Blocker, IsoDate, PlanLine, VoucherPlan } from "../types.ts";
+import type { Blocker, IsoDateTime, PlanLine, VoucherPlan } from "../types.ts";
+
+export { lastDayOfMonth };
 
 export interface BankRow {
-  date: IsoDate;
+  date: IsoDateTime;
+  /** Original clock time from the statement, e.g. "14:32". Ignored when `date` already has a time. */
+  time?: string;
   /** Signed: positive = money in (bank debit), negative = money out (bank credit). */
   amount: Kurus;
   transactionType: string;
@@ -100,16 +105,25 @@ export interface BankMonthInput {
   descriptionMaxBytes?: number;
 }
 
-export function lastDayOfMonth(year: number, month: number): IsoDate {
-  const day = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-/** Kural 18 monthly single voucher: header on the last day, lines on their own dates in order. */
+/**
+ * Kural 18: one DEK for the month. Header date is the last calendar day.
+ * Each line keeps the source transaction's own date and clock time; they are never copied from the header.
+ */
 export function planBankMonth(input: BankMonthInput): VoucherPlan {
   const blockers: Blocker[] = [];
-  const prefix = `${input.year}-${String(input.month).padStart(2, "0")}-`;
-  const outside = input.rows.filter((row) => !row.date.startsWith(prefix));
+  const prefix = monthPrefix(input.year, input.month);
+  const stamped = input.rows.map((row, index) => {
+    try {
+      return { row, index, when: combineDateAndTime(row.date, row.time) };
+    } catch (error) {
+      blockers.push({
+        code: "ROW_DATETIME_INVALID",
+        message: error instanceof Error ? error.message : "Satır tarihi okunamadı.",
+      });
+      return { row, index, when: datePart(row.date) };
+    }
+  });
+  const outside = stamped.filter((item) => !datePart(item.when).startsWith(prefix));
   if (outside.length > 0) {
     blockers.push({
       code: "ROW_OUTSIDE_MONTH",
@@ -121,17 +135,18 @@ export function planBankMonth(input: BankMonthInput): VoucherPlan {
     blockers.push({ code: "ZERO_AMOUNT_ROW", message: `${zero.length} ekstre satırının tutarı sıfır.` });
   }
 
-  const ordered = input.rows
-    .map((row, index) => ({ row, index }))
-    .sort((a, b) => (a.row.date === b.row.date ? a.index - b.index : a.row.date < b.row.date ? -1 : 1));
+  const ordered = stamped.sort((a, b) => {
+    const byTime = compareCivil(a.when, b.when);
+    return byTime === 0 ? a.index - b.index : byTime;
+  });
 
   const maxBytes = input.descriptionMaxBytes ?? 80;
   const lines: Omit<PlanLine, "seq">[] = [];
-  for (const { row } of ordered) {
+  for (const { row, when } of ordered) {
     const match = classifyBankRow(row, input);
     const description = fitCp1254(row.description.trim() || row.transactionType, maxBytes);
     const amount = Math.abs(row.amount);
-    const common = { amount, description, docNo: row.docNo, lineDate: row.date, docDate: row.date };
+    const common = { amount, description, docNo: row.docNo, lineDate: when, docDate: when };
     const bank = { ...common, account: input.bankAccount, ruleId: "R02.bank-side" };
     const counter = { ...common, account: match.account, ruleId: match.ruleId };
     if (row.amount > 0) {

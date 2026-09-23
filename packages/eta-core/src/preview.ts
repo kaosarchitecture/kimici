@@ -13,12 +13,12 @@ export function formatPlanPreview(plan: VoucherPlan): string {
     `Satır: ${plan.lines.length}`,
     `Borç: ${formatTr(debit)}  Alacak: ${formatTr(credit)}  Fark: ${formatTr(debit - credit)}`,
     "",
-    "Sıra  Hesap            B/A      Tutar  Kural                 Açıklama",
+    "Sıra  Hesap            B/A      Tutar  Satır tarihi           Kural                 Açıklama",
   ];
   for (const line of plan.lines) {
     const side = line.side === "D" ? "B" : "A";
     lines.push(
-      `${String(line.seq).padStart(4)}  ${line.account.padEnd(15)} ${side}  ${formatTr(line.amount).padStart(12)}  ${line.ruleId.padEnd(22)} ${line.description}`,
+      `${String(line.seq).padStart(4)}  ${line.account.padEnd(15)} ${side}  ${formatTr(line.amount).padStart(12)}  ${line.lineDate.padEnd(19)}  ${line.ruleId.padEnd(22)} ${line.description}`,
     );
   }
   if (plan.blockers.length > 0) {

@@ -1,6 +1,7 @@
 import { encodeCp1254 } from "./cp1254.ts";
+import { toNaiveSqlDate } from "./datetime.ts";
 import { kurusToDecimalString, type Kurus } from "./money.ts";
-import { totals, type IsoDate, type PlanLine, type Side, type VoucherPlan } from "./types.ts";
+import { totals, type PlanLine, type Side, type VoucherPlan } from "./types.ts";
 
 /** SQL layer binds these. CP1254 text is sent as bytes so ETA never sees UTF-8. */
 export type SqlValue =
@@ -27,8 +28,6 @@ export interface BuildVoucherInput {
   lineTemplate: Record<string, unknown>;
   descriptionMaxBytes?: number;
 }
-
-const ETA_EMPTY_DATE = new Date(Date.UTC(1900, 0, 1));
 
 const HEADER_OVERLAY_KEYS = [
   "MUHFISTAR",
@@ -72,7 +71,7 @@ export function buildVoucher(input: BuildVoucherInput): BuiltVoucher {
 
   const header = cloneRecord(input.headerTemplate);
   overlay(header, {
-    MUHFISTAR: isoToDate(plan.headerDate),
+    MUHFISTAR: toNaiveSqlDate(plan.headerDate),
     MUHFISNO: voucherNo,
     MUHFISREFNO: refNo,
     MUHFISBORCTOP: toSqlDecimal(debit),
@@ -108,7 +107,7 @@ function buildLine(
 ): Record<string, SqlValue> {
   const row = cloneRecord(template);
   overlay(row, {
-    MUHHARTAR: isoToDate(line.lineDate),
+    MUHHARTAR: toNaiveSqlDate(line.lineDate),
     MUHHARREFNO: refNo,
     MUHHARSIRANO: line.seq,
     MUHHARMUHKOD: line.account,
@@ -122,7 +121,7 @@ function buildLine(
     MUHHARACIKLAMA3: cp1254(line.detail?.unit ?? " ", 20),
     MUHHARMIKTUT: line.detail?.quantity ?? 0,
     MUHHARNO: voucherNo,
-    MUHHAREVRAKTAR: isoToDate(line.docDate),
+    MUHHAREVRAKTAR: toNaiveSqlDate(line.docDate),
     MUHHARBELTUR: kind,
     MUHHARVKNTCKNO: " ",
   });
@@ -154,12 +153,6 @@ function normalizeTemplateValue(value: unknown): SqlValue {
   if (typeof value === "number" || typeof value === "string") return value;
   if (typeof value === "boolean") return value ? 1 : 0;
   return String(value);
-}
-
-function isoToDate(iso: IsoDate): Date {
-  const [year, month, day] = iso.split("-").map(Number);
-  if (!year || !month || !day) return ETA_EMPTY_DATE;
-  return new Date(Date.UTC(year, month - 1, day));
 }
 
 function toSqlDecimal(kurus: Kurus): number {

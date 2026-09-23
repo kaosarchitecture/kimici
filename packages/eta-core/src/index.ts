@@ -1,4 +1,16 @@
 export { accountLevels, hasRoot, normalizeAccount, parentAccounts, rootAccount } from "./accounts.ts";
+export {
+  combineDateAndTime,
+  compareCivil,
+  datePart,
+  formatCivil,
+  isIsoDateTime,
+  lastDayOfMonth,
+  parseCivil,
+  toNaiveSqlDate,
+  type CivilDateTime,
+  type IsoDateTime,
+} from "./datetime.ts";
 export { cp1254ByteLength, cp1254Hex, decodeCp1254, encodeCp1254, fitCp1254, isCp1254Safe } from "./cp1254.ts";
 export { validatePlan, type GuardOptions, type Violation } from "./guards.ts";
 export { rollupMizan, topLevelDifference, type MizanInputLine, type MizanValue } from "./mizan.ts";
@@ -23,7 +35,6 @@ export { formatPlanPreview } from "./preview.ts";
 export {
   cariTokens,
   classifyBankRow,
-  lastDayOfMonth,
   planBankMonth,
   upperTr,
   type BankMonthInput,

@@ -87,7 +87,8 @@ numarasıdır.
 | `DESC_MAX_LEN` | Açıklama CP1254 bayt olarak kolon sınırını aşmaz | 19 |
 | `DOC_DATE_SET` | Evrak tarihi boş veya 1900 değil | 18 |
 | `LINE_DATES_CHRONO` | Satırlar tarih sırasında | 18 |
-| `HEADER_DATE_RULE` | Tek mahsup fişinde başlık ayın son günü, münferit faturada fatura tarihi | 18 |
+| `HEADER_DATE_RULE` | Tek mahsupta `MUHFISTAR` ayın son günü; münferit faturada fatura tarihi | 18 |
+| `LINE_KEEPS_ORIGINAL_TIME` | Tek mahsupta `MUHHARTAR` / `MUHHAREVRAKTAR` işlemin kendi tarih ve saati; ayın son günü satırlara kopyalanmaz | 18 |
 | `FAT_30K_NOT_CASH` | Alış faturası ≥ 30.000 TL ise kapanış kasa (`100 …`) olamaz | 13 |
 | `BANK_NO_FAT_RULES` | DEK satırında `N.FT İLE` açıklaması yok | 15 |
 | `POSITIVE_AMOUNTS` | Satır tutarları sıfırdan büyük | 02 |
@@ -95,6 +96,19 @@ numarasıdır.
 
 Veritabanına bağlı ek kontroller (`fis.yaz` içinde, onaydan sonra): mükerrer evrak no,
 REF ve fiş no benzersizliği, yazma sonrası hex ve satır sayısı, mizan denkliği.
+
+### Tek mahsup fişi (Kural 18)
+
+Ayda bir DEK / dönem fişi yazılırken:
+
+| Alan | Değer |
+|---|---|
+| `MUHFISTAR` (fiş tarihi) | Ayın son takvim günü. Saat fiş saati (`MUHFISSAAT`), işlem saati değil. |
+| `MUHHARTAR` (satır tarihi) | İşlemin kendi tarihi ve saati. Ayın son günü buraya kopyalanmaz. |
+| `MUHHAREVRAKTAR` (evrak tarihi) | Aynı orijinal an. Boş veya 1900 yasak. |
+| Sıra | Kronolojik: ayın 1'inden son güne, aynı günde saate göre. |
+
+Münferit fatura bu kuralın dışındadır: başlık ve satır, faturanın kendi tarihidir.
 
 ## 6. Hangi yapay zeka?
 

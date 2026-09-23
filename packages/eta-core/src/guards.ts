@@ -1,7 +1,7 @@
 import { rootAccount } from "./accounts.ts";
 import { cp1254ByteLength, isCp1254Safe } from "./cp1254.ts";
 import { NFT_THRESHOLD } from "./rules/purchase-invoice.ts";
-import { lastDayOfMonth } from "./rules/bank-statement.ts";
+import { compareCivil, datePart, isIsoDateTime, lastDayOfMonth } from "./datetime.ts";
 import { totals, type PlanLine, type VoucherPlan } from "./types.ts";
 
 export interface Violation {
@@ -19,7 +19,6 @@ export interface GuardOptions {
 /** ASCII spellings that ETA office texts must never contain (DENK rule 01.7). */
 const ASCII_TURKISH = [/\bILE\s+(SATIS|ALIS)\b/, /\bN\.FT\s+ILE\b/, /\bIND\.?\s*KDV\b/, /\bHES\.?\s*KDV\b/, /\bYURT\s+ICI\b/];
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Invariants every plan must satisfy before anything is written to ETA.
@@ -104,7 +103,7 @@ function checkLine(plan: VoucherPlan, line: PlanLine, maxBytes: number, violatio
     violations.push({ code: "DOC_NO_SET", message: "Evrak numarası boş.", seq });
   }
   for (const [field, value] of [["lineDate", line.lineDate], ["docDate", line.docDate]] as const) {
-    if (!ISO_DATE.test(value) || value.startsWith("1900-")) {
+    if (!isIsoDateTime(value) || datePart(value).startsWith("1900-")) {
       violations.push({ code: "DOC_DATE_SET", message: `${field} boş veya 1900 olamaz: "${value}"`, seq });
     }
   }
@@ -114,21 +113,36 @@ function checkDates(plan: VoucherPlan, violations: Violation[]) {
   for (let i = 1; i < plan.lines.length; i++) {
     const previous = plan.lines[i - 1];
     const current = plan.lines[i];
-    if (previous && current && current.lineDate < previous.lineDate) {
-      violations.push({ code: "LINE_DATES_CHRONO", message: "Satırlar tarih sırasında değil.", seq: current.seq });
+    if (previous && current && compareCivil(current.lineDate, previous.lineDate) < 0) {
+      violations.push({ code: "LINE_DATES_CHRONO", message: "Satırlar işlem tarih/saat sırasına göre değil.", seq: current.seq });
       break;
     }
   }
   if (plan.mode === "monthly-single") {
-    const [year, month] = plan.headerDate.split("-").map(Number);
-    if (!year || !month || plan.headerDate !== lastDayOfMonth(year, month)) {
+    const headerDay = datePart(plan.headerDate);
+    const [year, month] = headerDay.split("-").map(Number);
+    if (!year || !month || headerDay !== lastDayOfMonth(year, month)) {
       violations.push({ code: "HEADER_DATE_RULE", message: "Tek mahsup fişinin başlık tarihi ayın son günü olmalı." });
     }
-    const distinct = new Set(plan.lines.map((line) => line.lineDate));
-    if (plan.lines.length > 2 && distinct.size === 1 && distinct.has(plan.headerDate)) {
-      violations.push({ code: "HEADER_DATE_RULE", message: "Tüm satırlara ayın son günü basılmış; satırlar kendi tarihinde olmalı." });
+    const lineDays = plan.lines.map((line) => datePart(line.lineDate));
+    const distinctDays = new Set(lineDays);
+    if (plan.lines.length > 2 && distinctDays.size === 1 && distinctDays.has(headerDay)) {
+      violations.push({
+        code: "LINE_KEEPS_ORIGINAL_TIME",
+        message: "Tüm satırlara fiş tarihi (ayın son günü) basılmış. Satır tarihi işlemin kendi tarih ve saati olmalı.",
+      });
     }
-  } else if (plan.lines.some((line) => line.lineDate !== plan.headerDate)) {
+    for (const line of plan.lines) {
+      if (datePart(line.docDate) !== datePart(line.lineDate)) {
+        violations.push({
+          code: "LINE_KEEPS_ORIGINAL_TIME",
+          message: "Satır tarihi ile evrak tarihi aynı orijinal işlem anı olmalı.",
+          seq: line.seq,
+        });
+        break;
+      }
+    }
+  } else if (plan.lines.some((line) => datePart(line.lineDate) !== datePart(plan.headerDate))) {
     violations.push({ code: "HEADER_DATE_RULE", message: "Münferit fatura fişinde başlık ve satır tarihi fatura tarihi olmalı." });
   }
 }

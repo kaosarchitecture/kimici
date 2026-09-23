@@ -1,10 +1,12 @@
+import type { IsoDateTime } from "./datetime.ts";
 import type { Kurus } from "./money.ts";
+
+export type { IsoDateTime };
+/** @deprecated Use IsoDateTime; date-only strings remain valid. */
+export type IsoDate = IsoDateTime;
 
 /** D = borç (MUHHARBATIPI 1), C = alacak (MUHHARBATIPI 2). */
 export type Side = "D" | "C";
-
-/** ISO date "YYYY-MM-DD". */
-export type IsoDate = string;
 
 export interface LineDetail {
   /** MUHHARACIKLAMA1, e.g. "(320 A=014)". */
@@ -25,8 +27,10 @@ export interface PlanLine {
   description: string;
   specialCode?: string;
   docNo: string;
-  lineDate: IsoDate;
-  docDate: IsoDate;
+  /** MUHHARTAR: original transaction date/time. On monthly-single this is never the header date unless the transaction fell on that day. */
+  lineDate: IsoDateTime;
+  /** MUHHAREVRAKTAR: same original date/time as the source document. */
+  docDate: IsoDateTime;
   detail?: LineDetail;
   /** Which rule produced the line, for the preview and the audit trail. */
   ruleId: string;
@@ -46,7 +50,8 @@ export interface VoucherPlan {
   companyDb: string;
   kind: VoucherKind;
   mode: VoucherMode;
-  headerDate: IsoDate;
+  /** MUHFISTAR. monthly-single: last calendar day of the month. single-invoice: the invoice date. */
+  headerDate: IsoDateTime;
   /** MUHFISOZELKOD1, e.g. "ALF" for purchase invoices. */
   specialCode1?: string;
   /** MUHFISEKCHAR2 / header note shown in ETA. */
