@@ -1,13 +1,6 @@
 import type { ReactNode } from "react";
 
-export type PageId = "gorunum" | "yazdir";
-
-const LINKS: { id: PageId; href: string; label: string }[] = [
-  { id: "gorunum", href: "#/", label: "Görünüm" },
-  { id: "yazdir", href: "#/yazdir", label: "Fiş yazdır" },
-];
-
-export function Shell(props: { page: PageId; children: ReactNode }) {
+export function Shell(props: { children: ReactNode }) {
   return (
     <div className="app">
       <div className="aurora" aria-hidden>
@@ -26,13 +19,6 @@ export function Shell(props: { page: PageId; children: ReactNode }) {
           </p>
           <p className="brand-by">by K.A.O.S. ARC.</p>
         </div>
-        <nav className="nav" aria-label="Sayfalar">
-          {LINKS.map((link) => (
-            <a key={link.id} href={link.href} className={props.page === link.id ? "active" : undefined}>
-              {link.label}
-            </a>
-          ))}
-        </nav>
         <div className="rail-foot">
           <p className="rail-note">
             Defter müşteri Windows’unda kalır. Bu ekran yalnız ajanın ittiği izinli satırları gösterir.
@@ -43,12 +29,8 @@ export function Shell(props: { page: PageId; children: ReactNode }) {
       <main className="stage">
         <header className="top">
           <div>
-            <h1>{props.page === "gorunum" ? "İzinli görünüm" : "Fiş yazdır"}</h1>
-            <p className="lede">
-              {props.page === "gorunum"
-                ? "Evrak yüklenmez. Kiracı kodu ile bağlanın; ajan onaydan sonra satır iter."
-                : "Yalnız itilen izinli satırlardan fiş çıkar."}
-            </p>
+            <h1>İzinli görünüm</h1>
+            <p className="lede">Evrak yüklenmez. Kiracı kodu ile bağlanın; ajan onaydan sonra satır iter.</p>
           </div>
           <img className="wordmark-line" src="/brand/dijital-personel.png" alt="dijital personel" />
         </header>

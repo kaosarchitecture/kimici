@@ -172,9 +172,6 @@ export function View() {
           >
             Görünümü kapat
           </button>
-          <a className="as-btn ghost" href="#/yazdir">
-            Fişi yazdır
-          </a>
         </div>
         {error ? <p className="lede">{error}</p> : null}
       </section>
