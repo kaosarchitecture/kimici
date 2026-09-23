@@ -1,115 +1,51 @@
 import { DurableObject } from "cloudflare:workers";
-import { buildChatMessages, DEFAULT_XAI_MODEL, runXaiChat } from "../../../packages/consent-view/src/ai.ts";
-import { buildKnowledgePack } from "../../../packages/consent-view/src/knowledge.ts";
-import { documentFromFile, type UploadedDocument } from "../../../packages/consent-view/src/ubl.ts";
+import { ConsentHub, type HubSnapshot } from "../../../packages/consent-view/src/hub.ts";
+import {
+  isControlPlanePath,
+  isHubPath,
+  json,
+  routeControlPlane,
+} from "../../../packages/consent-view/src/http.ts";
+import { tenantFromRequest } from "../../../packages/consent-view/src/tenant.ts";
 
 export interface Env {
   ASSETS: Fetcher;
-  EVRAK: DurableObjectNamespace<EvrakStore>;
-  AI: Ai;
-  XAI_API_KEY?: string;
-  XAI_MODEL?: string;
+  HUB: DurableObjectNamespace<TenantHub>;
 }
 
-const MAX = 5 * 1024 * 1024;
-
-export class EvrakStore extends DurableObject<Env> {
-  async getDoc(): Promise<UploadedDocument | null> {
-    return (await this.ctx.storage.get<UploadedDocument>("doc")) ?? null;
+/** One hub per tenant id. Stores consent + permitted view only — never an invoice file. */
+export class TenantHub extends DurableObject<Env> {
+  async fetch(request: Request): Promise<Response> {
+    const hub = new ConsentHub();
+    const snap = await this.ctx.storage.get<HubSnapshot>("hub");
+    if (snap) hub.restore(snap);
+    const res = await routeControlPlane(request, async () => hub);
+    await this.ctx.storage.put("hub", hub.snapshot());
+    return res ?? json({ error: "bulunamadı" }, 404);
   }
-
-  async putDoc(doc: UploadedDocument): Promise<UploadedDocument> {
-    await this.ctx.storage.put("doc", doc);
-    return doc;
-  }
-}
-
-function json(data: unknown, status = 200): Response {
-  return Response.json(data, { status });
-}
-
-function decodeBase64(raw: string): Uint8Array {
-  const bin = atob(raw);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-async function storedOrBody(
-  store: DurableObjectStub<EvrakStore>,
-  bodyDoc: UploadedDocument | null | undefined,
-): Promise<UploadedDocument | null> {
-  if (bodyDoc && bodyDoc.fileName) return bodyDoc;
-  return store.getDoc();
-}
-
-function modelOf(env: Env): string {
-  return env.XAI_MODEL || DEFAULT_XAI_MODEL;
-}
-
-async function runGrok(env: Env, messages: ReturnType<typeof buildChatMessages>): Promise<{ reply: string; via: string }> {
-  const model = modelOf(env);
-  if (!env.XAI_API_KEY) {
-    throw new Error("Grok bağlı değil. wrangler secret put XAI_API_KEY — anahtar koda yazılmaz.");
-  }
-  return { reply: await runXaiChat(env.XAI_API_KEY, messages, model), via: "xai-rest" };
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/knowledge") {
-      if (request.method !== "GET") return json({ error: "izin yok" }, 405);
-      return json({ pack: buildKnowledgePack(), where: "bilgi paketi · müşteri defteri yok" });
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+      return json(null, 204);
     }
 
-    if (url.pathname === "/api/ai") {
-      if (request.method === "GET") {
-        return json({
-          connected: Boolean(env.XAI_API_KEY),
-          model: modelOf(env),
-          via: env.XAI_API_KEY ? "xai-rest" : "disconnected",
-          where: "denk-app Worker · Grok · müşteri makinesine gitmez",
-        });
-      }
-      if (request.method !== "POST") return json({ error: "izin yok" }, 405);
-      const body = (await request.json()) as { message?: string; document?: UploadedDocument | null };
-      const store = env.EVRAK.getByName("last");
-      const doc = await storedOrBody(store, body.document);
+    if (isHubPath(url.pathname)) {
       try {
-        const { reply, via } = await runGrok(env, buildChatMessages(body.message ?? "", doc));
-        return json({ reply, model: modelOf(env), via });
+        const tenant = tenantFromRequest(request);
+        return env.HUB.getByName(tenant).fetch(request);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Grok cevap vermedi.";
-        return json({ error: message, model: modelOf(env) }, 502);
+        const message = error instanceof Error ? error.message : "Kiracı kodu geçersiz.";
+        return json({ error: message }, 400);
       }
     }
 
-    if (url.pathname === "/api/evrak") {
-      const store = env.EVRAK.getByName("last");
-      if (request.method === "GET") {
-        return json({ document: await store.getDoc() });
-      }
-      if (request.method === "POST") {
-        const body = (await request.json()) as {
-          fileName?: string;
-          mime?: string;
-          contentBase64?: string;
-        };
-        const bytes = decodeBase64(body.contentBase64 ?? "");
-        if (bytes.byteLength === 0) return json({ error: "Dosya boş." }, 400);
-        if (bytes.byteLength > MAX) return json({ error: "Dosya 5 MB üstü olamaz." }, 400);
-        const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-        const doc = documentFromFile(
-          (body.fileName ?? "evrak").slice(0, 200),
-          body.mime ?? "application/octet-stream",
-          bytes.byteLength,
-          text,
-        );
-        return json({ document: await store.putDoc(doc) });
-      }
-      return json({ error: "izin yok" }, 405);
+    if (isControlPlanePath(url.pathname)) {
+      const res = await routeControlPlane(request);
+      return res ?? json({ error: "bulunamadı" }, 404);
     }
 
     return env.ASSETS.fetch(request);

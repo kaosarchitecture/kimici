@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Shell, type PageId } from "./components/Shell.tsx";
-import { Desk } from "./pages/Desk.tsx";
 import { PrintVoucher } from "./pages/PrintVoucher.tsx";
+import { View } from "./pages/View.tsx";
 
 function pageFromHash(): PageId {
   const hash = window.location.hash.replace(/^#\/?/, "");
   if (hash === "yazdir") return "yazdir";
-  return "ai";
+  return "gorunum";
 }
 
 export function App() {
@@ -20,7 +20,7 @@ export function App() {
 
   return (
     <Shell page={page}>
-      {page === "ai" ? <Desk /> : null}
+      {page === "gorunum" ? <View /> : null}
       {page === "yazdir" ? <PrintVoucher /> : null}
     </Shell>
   );

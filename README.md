@@ -13,6 +13,7 @@ kendi bilgisayarında uygulayan SaaS.
 - Yeni web arayüzü: `apps/admin-ui` — DENKWEB’den bağımsız, sıfırdan.
 - Cloudflare Worker: `apps/denk-app` (denk-central / denkmuhasebe.com değil).
 - SaaS: bilgi merkeze (`GET /api/knowledge`), iş Windows ajanına (`apps/denk-agent`).
+  Web yalnız kiracı başına itilen izinli görünümü gösterir. Evrak Worker’da durmaz.
   Onlarca kullanıcı fişi bizim sunucuda sıraya sokmaz.
 
 ```bash

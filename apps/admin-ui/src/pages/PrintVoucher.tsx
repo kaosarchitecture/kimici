@@ -1,16 +1,31 @@
 import { useEffect, useState } from "react";
-import { voucherFromEvrak, type PrintVoucher as Voucher } from "../voucher.ts";
-import type { Evrak } from "./types.ts";
+import { voucherFromView, type PrintVoucher as Voucher } from "../voucher.ts";
+import { TENANT_KEY, type HubState } from "./types.ts";
+
+function loadTenant(): string {
+  try {
+    return localStorage.getItem(TENANT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 export function PrintVoucher() {
   const [voucher, setVoucher] = useState<Voucher | null>(null);
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
-    fetch("/api/evrak")
+    const tenant = loadTenant();
+    if (!tenant) {
+      setMissing(true);
+      return;
+    }
+    fetch(`/api/state?tenant=${encodeURIComponent(tenant)}`, {
+      headers: { "X-Denk-Tenant": tenant },
+    })
       .then((res) => res.json())
-      .then((body: { document?: Evrak | null }) => {
-        if (body.document) setVoucher(voucherFromEvrak(body.document));
+      .then((body: HubState) => {
+        if (body.view && body.view.records.length > 0) setVoucher(voucherFromView(body.view));
         else setMissing(true);
       })
       .catch(() => setMissing(true));
@@ -19,9 +34,13 @@ export function PrintVoucher() {
   if (!voucher) {
     return (
       <section className="sheet" style={{ maxWidth: 520 }}>
-        <p className="empty">{missing ? "Yazdırılacak evrak yok. Önce AI sayfasından gerçek bir dosya yükleyin." : "Yükleniyor…"}</p>
+        <p className="empty">
+          {missing
+            ? "Yazdırılacak izinli görünüm yok. Önce ajan satır itsin."
+            : "Yükleniyor…"}
+        </p>
         <a className="as-btn" href="#/">
-          AI’ye dön
+          Görünüme dön
         </a>
       </section>
     );
@@ -30,10 +49,10 @@ export function PrintVoucher() {
   return (
     <div className="print-wrap">
       <div className="print-bar no-print">
-        <p>Bu fiş yüklenen evraktan üretildi.</p>
+        <p>Bu fiş, ajanın Windows onayıyla ittiği satırlardan üretildi. Evrak sunucuda yok.</p>
         <div className="row" style={{ marginTop: 0 }}>
           <a className="as-btn ghost" href="#/">
-            AI
+            Görünüm
           </a>
           <button type="button" onClick={() => window.print()}>
             Fişi yazdır

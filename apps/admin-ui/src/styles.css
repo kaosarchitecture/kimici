@@ -99,7 +99,7 @@ body {
 .pill.wait { background: var(--wait-bg); color: var(--wait); }
 .pill.bad { background: var(--bad-bg); color: var(--bad); }
 
-.desk-ai { max-width: 720px; }
+.desk-ai { max-width: 960px; }
 .desk-ai .thread { max-height: 42vh; overflow: auto; }
 .desk {
   display: grid;
@@ -166,6 +166,7 @@ button.warn {
 }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 .row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; }
+.row input[type="text"] { flex: 1; min-width: 12rem; }
 a.as-btn {
   display: inline-block;
   text-decoration: none;

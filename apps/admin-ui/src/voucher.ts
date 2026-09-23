@@ -1,4 +1,4 @@
-import type { Evrak } from "./pages/types.ts";
+import type { ViewPayload } from "./pages/types.ts";
 
 export interface PrintLine {
   seq: number;
@@ -26,51 +26,24 @@ function trDate(iso: string): string {
   return `${match[3]}.${match[2]}.${match[1]}`;
 }
 
-export function voucherFromEvrak(doc: Evrak): PrintVoucher {
-  const date = trDate(doc.issueDate);
-  const name = doc.supplierName || doc.fileName;
-  const lines: PrintLine[] = [];
-  if (doc.netText) {
-    lines.push({ seq: 1, account: "770 01", side: "B", amountText: doc.netText, description: name, date });
-  }
-  if (doc.vatText) {
-    lines.push({
-      seq: lines.length + 1,
-      account: "191 02 20",
-      side: "B",
-      amountText: doc.vatText,
-      description: "İND.KDV.",
-      date,
-    });
-  }
-  if (doc.payableText) {
-    lines.push({
-      seq: lines.length + 1,
-      account: "320",
-      side: "A",
-      amountText: doc.payableText,
-      description: "N.FT İLE ALIŞ",
-      date,
-    });
-  }
-  if (lines.length === 0) {
-    lines.push({
-      seq: 1,
-      account: "—",
-      side: "B",
-      amountText: "—",
-      description: doc.fileName,
-      date: date || "—",
-    });
-  }
+/** Print only agent-pushed permitted fields. Invoice XML never reaches this page. */
+export function voucherFromView(view: ViewPayload): PrintVoucher {
+  const lines: PrintLine[] = view.records.map((row, index) => ({
+    seq: index + 1,
+    account: row.account ?? "—",
+    side: row.side === "A" ? "A" : "B",
+    amountText: row.amountText ?? "—",
+    description: row.description ?? "",
+    date: row.lineDate ? trDate(row.lineDate) : "",
+  }));
   return {
-    company: doc.supplierName || "",
-    kind: doc.kind === "ubl-invoice" ? "Alış faturası (FAT)" : "Yüklenen evrak",
-    number: doc.invoiceNo,
-    date,
-    note: doc.fileName,
-    debit: doc.payableText,
-    credit: doc.payableText,
+    company: "",
+    kind: "Fiş planı önizlemesi",
+    number: "",
+    date: lines[0]?.date ?? "",
+    note: "Yalnız Windows onayıyla itilen alanlar",
+    debit: "",
+    credit: "",
     lines,
   };
 }

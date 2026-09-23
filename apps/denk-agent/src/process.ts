@@ -1,13 +1,28 @@
 import { formatPlanPreview } from "../../../packages/eta-core/src/preview.ts";
-import { parseTrAmount } from "../../../packages/eta-core/src/money.ts";
+import { formatTr, parseTrAmount } from "../../../packages/eta-core/src/money.ts";
 import { planPurchaseInvoice } from "../../../packages/eta-core/src/rules/purchase-invoice.ts";
+import type { VoucherPlan } from "../../../packages/eta-core/src/types.ts";
 import type { KnowledgePack } from "../../../packages/consent-view/src/knowledge.ts";
 import { documentFromFile, type UploadedDocument } from "../../../packages/consent-view/src/ubl.ts";
+import type { ViewRecord } from "../../../packages/consent-view/src/types.ts";
 
 export interface LocalResult {
   document: UploadedDocument;
   preview: string;
   blockers: string[];
+  records: ViewRecord[];
+}
+
+/** Plan lines only. Invoice no / supplier / XML never become view fields. */
+export function planToViewRecords(plan: VoucherPlan): ViewRecord[] {
+  return plan.lines.map((line) => ({
+    account: line.account,
+    side: line.side === "D" ? "B" : "A",
+    amountText: formatTr(line.amount),
+    description: line.description,
+    lineDate: String(line.lineDate).slice(0, 10),
+    ruleId: line.ruleId,
+  }));
 }
 
 export function processLocalEvrak(fileName: string, mime: string, xml: string, pack: KnowledgePack): LocalResult {
@@ -34,5 +49,6 @@ export function processLocalEvrak(fileName: string, mime: string, xml: string, p
     document,
     preview: formatPlanPreview(plan),
     blockers: plan.blockers.map((item) => item.message),
+    records: planToViewRecords(plan),
   };
 }

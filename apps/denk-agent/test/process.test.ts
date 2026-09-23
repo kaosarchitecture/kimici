@@ -11,5 +11,9 @@ describe("edge agent", () => {
     expect(result.preview).toContain("İND.KDV.");
     expect(result.preview).toContain("100 01");
     expect(result.blockers).toEqual([]);
+    expect(result.records.some((row) => row.description === "İND.KDV.")).toBe(true);
+    expect(result.records.some((row) => row.account === "100 01")).toBe(true);
+    expect(JSON.stringify(result.records)).not.toContain("A-1");
+    expect(result.records.every((row) => !("invoiceNo" in row))).toBe(true);
   });
 });

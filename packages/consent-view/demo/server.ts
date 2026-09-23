@@ -2,68 +2,19 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  buildChatMessages,
-  cfGrokId,
-  DEFAULT_XAI_MODEL,
-  extractModelText,
-  listXaiModels,
-  runXaiChat,
-  selectWorkingXaiModel,
-  type ChatMessage,
-} from "../src/ai.ts";
-import { buildKnowledgePack } from "../src/knowledge.ts";
-import { defaultXaiEnvPath, parseXaiEnv } from "../src/xai-env.ts";
-import { documentFromFile, type UploadedDocument } from "../src/ubl.ts";
-
-const MAX_EVRAK = 5 * 1024 * 1024;
-let lastEvrak: UploadedDocument | null = null;
+import { ConsentHub } from "../src/hub.ts";
+import { CORS, isControlPlanePath, routeControlPlane } from "../src/http.ts";
 
 const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
 const PORT = Number(process.env.PORT ?? 8788);
-const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
-const TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? "";
+const hubs = new Map<string, ConsentHub>();
 
-const session = {
-  key: "",
-  model: DEFAULT_XAI_MODEL,
-  via: "disconnected",
-  source: "",
-};
-
-async function bootXai(): Promise<void> {
-  const path = defaultXaiEnvPath();
-  const keys: string[] = [];
-  let fromFile: string[] = [];
-  if (process.env.XAI_API_KEY) keys.push(process.env.XAI_API_KEY);
-  if (path) {
-    try {
-      const parsed = parseXaiEnv(await readFile(path, "utf8"));
-      keys.push(...parsed.apiKeys);
-      fromFile = parsed.preferred ? [parsed.preferred, ...parsed.models] : parsed.models;
-      session.source = path;
-    } catch {
-      session.source = "";
-    }
-  }
-  const uniqueKeys = [...new Set(keys.filter(Boolean))];
-  for (const key of uniqueKeys) {
-    const apiList = await listXaiModels(key);
-    const candidates = fromFile.length > 0 ? fromFile : apiList;
-    if (candidates.length === 0) continue;
-    try {
-      session.model = await selectWorkingXaiModel(key, candidates);
-    } catch {
-      if (fromFile.length && apiList.length) {
-        session.model = await selectWorkingXaiModel(key, apiList);
-      } else {
-        continue;
-      }
-    }
-    session.key = key;
-    session.via = "xai-rest";
-    return;
-  }
+function hubFor(tenant: string): ConsentHub {
+  const existing = hubs.get(tenant);
+  if (existing) return existing;
+  const hub = new ConsentHub();
+  hubs.set(tenant, hub);
+  return hub;
 }
 
 const MIME: Record<string, string> = {
@@ -74,105 +25,58 @@ const MIME: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-function cors(res: ServerResponse): void {
-  res.setHeader("access-control-allow-origin", "*");
-  res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type");
+function applyCors(res: ServerResponse): void {
+  for (const [key, value] of Object.entries(CORS)) res.setHeader(key, value);
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
-  cors(res);
+  applyCors(res);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }
 
-async function readBody(req: IncomingMessage): Promise<unknown> {
+async function toFetchRequest(req: IncomingMessage, url: URL): Promise<Request> {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (typeof value === "string") headers.set(key, value);
+    else if (Array.isArray(value)) headers.set(key, value.join(", "));
+  }
+  const method = req.method ?? "GET";
+  if (method === "GET" || method === "HEAD") {
+    return new Request(url, { method, headers });
+  }
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  return new Request(url, { method, headers, body: Buffer.concat(chunks) });
 }
 
-async function runGrok(messages: ChatMessage[]): Promise<{ reply: string; via: string }> {
-  if (session.key) {
-    return { reply: await runXaiChat(session.key, messages, session.model), via: session.via };
+async function writeFetchResponse(res: ServerResponse, response: Response): Promise<void> {
+  applyCors(res);
+  response.headers.forEach((value, key) => {
+    if (key === "content-length") return;
+    res.setHeader(key, value);
+  });
+  res.writeHead(response.status);
+  if (response.status === 204 || !response.body) {
+    res.end();
+    return;
   }
-  if (ACCOUNT && TOKEN) {
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/v1/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${TOKEN}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ model: cfGrokId(session.model), messages }),
-      },
-    );
-    const payload = (await res.json()) as { result?: unknown; errors?: Array<{ message?: string }> };
-    if (!res.ok) {
-      throw new Error(payload.errors?.[0]?.message ?? `Cloudflare AI HTTP ${res.status}`);
-    }
-    const reply = extractModelText(payload.result ?? payload);
-    if (!reply) throw new Error(`${session.model} boş cevap verdi.`);
-    return { reply, via: "ai-gateway" };
-  }
-  throw new Error(
-    "Grok bağlı değil. Windows’ta C:\\DENK\\secrets\\xai.env okunur; bu Linux ortamında XAI_ENV_FILE veya wrangler secret gerekir. Anahtar koda yazılmaz.",
-  );
+  res.end(Buffer.from(await response.arrayBuffer()));
 }
 
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
     const method = req.method ?? "GET";
-    cors(res);
+    applyCors(res);
 
-    if (method === "OPTIONS") {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-
-    if (method === "GET" && url.pathname === "/api/knowledge") {
-      return json(res, 200, { pack: buildKnowledgePack(), where: "bilgi paketi · müşteri defteri yok" });
-    }
-
-    if (method === "GET" && url.pathname === "/api/ai") {
-      const connected = Boolean(session.key || (ACCOUNT && TOKEN));
-      return json(res, 200, {
-        connected,
-        model: session.model,
-        via: session.key ? session.via : ACCOUNT && TOKEN ? "ai-gateway" : "disconnected",
-        where: "Grok · xai.env veya Worker secret · müşteri makinesine gitmez",
-        source: session.source || undefined,
-      });
-    }
-
-    if (method === "POST" && url.pathname === "/api/ai") {
-      const body = (await readBody(req)) as { message?: string; document?: UploadedDocument | null };
-      const doc = body.document?.fileName ? body.document : lastEvrak;
-      const { reply, via } = await runGrok(buildChatMessages(body.message ?? "", doc));
-      return json(res, 200, { reply, model: session.model, via });
-    }
-
-    if (method === "GET" && url.pathname === "/api/evrak") {
-      return json(res, 200, { document: lastEvrak });
-    }
-
-    if (method === "POST" && url.pathname === "/api/evrak") {
-      const body = (await readBody(req)) as {
-        fileName?: string;
-        mime?: string;
-        contentBase64?: string;
-      };
-      const fileName = (body.fileName ?? "evrak").slice(0, 200);
-      const mime = body.mime ?? "application/octet-stream";
-      const buf = Buffer.from(body.contentBase64 ?? "", "base64");
-      if (buf.length === 0) return json(res, 400, { error: "Dosya boş." });
-      if (buf.length > MAX_EVRAK) return json(res, 400, { error: "Dosya 5 MB üstü olamaz." });
-      lastEvrak = documentFromFile(fileName, mime, buf.length, buf.toString("utf8"));
-      return json(res, 200, { document: lastEvrak });
+    if (isControlPlanePath(url.pathname) || (method === "OPTIONS" && url.pathname.startsWith("/api/"))) {
+      const request = await toFetchRequest(req, url);
+      const response = await routeControlPlane(request, async (tenant) => hubFor(tenant));
+      if (response) {
+        await writeFetchResponse(res, response);
+        return;
+      }
     }
 
     if (method === "GET") {
@@ -195,17 +99,11 @@ const server = createServer(async (req, res) => {
     json(res, 404, { error: "bulunamadı" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Hata";
-    const status = message.includes("bağlı değil") ? 503 : 400;
-    json(res, status, { error: message });
+    json(res, 400, { error: message });
   }
 });
 
-await bootXai();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`DENK: http://0.0.0.0:${PORT}`);
-  console.log(
-    session.key || (ACCOUNT && TOKEN)
-      ? `AI: ${session.model} (${session.via}${session.source ? ` · ${session.source}` : ""})`
-      : "Grok bağlı değil — C:\\DENK\\secrets\\xai.env veya XAI_ENV_FILE",
-  );
+  console.log("Evrak yok · bilgi paketi ve kiracı başına izinli görünüm");
 });
