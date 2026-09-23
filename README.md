@@ -11,6 +11,7 @@ kendi bilgisayarında uygulayan SaaS.
 - İlk kod: `packages/eta-core` — veritabanı bağlantısı olmayan, test edilmiş kural çekirdeği.
 - İzinli görünüm protokolü: `packages/consent-view`.
 - Yeni web arayüzü: `apps/admin-ui` — DENKWEB’den bağımsız, sıfırdan.
+- Cloudflare Worker iskeleti: `apps/denk-app` (denk-central / denkmuhasebe.com değil).
 
 ```bash
 cd packages/eta-core && npm install && npm test
