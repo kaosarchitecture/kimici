@@ -109,7 +109,7 @@ export function View() {
             id="tenant"
             type="text"
             value={tenantDraft}
-            placeholder="ornek-buro"
+            autoComplete="off"
             onChange={(event) => setTenantDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") applyTenant();

@@ -17,7 +17,7 @@ export {
 export { defaultXaiEnvPath, parseXaiEnv, sortGrokNewest, WINDOWS_XAI_ENV } from "./xai-env.ts";
 export { ConsentHub } from "./hub.ts";
 export { filterRecords, isViewField, sanitizeFields } from "./filter.ts";
-export { attestWindowsIdentity, assertLiveWindowsIdentity, demoWindowsIdentity } from "./windows.ts";
+export { attestWindowsIdentity, assertLiveWindowsIdentity } from "./windows.ts";
 export { parseTenantId, tenantFromRequest } from "./tenant.ts";
 export {
   BOOKS_GONE,
