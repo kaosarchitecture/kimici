@@ -4,7 +4,7 @@ import type { BuiltVoucher } from "../../../packages/eta-core/src/writer.ts";
 import type { VoucherPlan } from "../../../packages/eta-core/src/types.ts";
 import { buildFromTemplate, etaNote, readMachine, type EtaAccess, type LocalRead, type SqlPort } from "./eta-session.ts";
 import { listLocalDir } from "./local-dir.ts";
-import { windowsSqlPort } from "./windows-sql.ts";
+import { listLocalSqlServers, windowsSqlPort } from "./windows-sql.ts";
 
 export interface AgentRuntime {
   pack: KnowledgePack | null;
@@ -22,7 +22,12 @@ export interface HubMessage {
 export async function handleHubMessage(
   runtime: AgentRuntime,
   message: HubMessage,
-  io: { sql?: SqlPort; listDir?: (dir: string) => Promise<string[]> } = {},
+  io: {
+    sql?: SqlPort;
+    listDir?: (dir: string) => Promise<string[]>;
+    servers?: readonly string[];
+    log?: (line: string) => void;
+  } = {},
 ): Promise<{ runtime: AgentRuntime; outbound: AgentResultMessage | null }> {
   if (message.type === "rules" && message.pack?.version) {
     return { runtime: { ...runtime, pack: message.pack }, outbound: null };
@@ -40,7 +45,8 @@ export async function handleHubMessage(
   let server: string | null = null;
   let readyDatabases: string[] = [];
   try {
-    const found = await readMachine(port, io.listDir ?? listLocalDir);
+    const servers = io.servers ?? (await listLocalSqlServers());
+    const found = await readMachine(port, io.listDir ?? listLocalDir, servers, io.log ?? ((line) => console.log(line)));
     access = { sql: found.sql, companies: found.companies, build: found.build };
     read = { databases: found.databases, companies: found.companies, vouchers: found.vouchers, files: found.files };
     server = found.server;

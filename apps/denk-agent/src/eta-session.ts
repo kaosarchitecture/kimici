@@ -8,10 +8,11 @@ export const LOCAL_SQL_SERVERS = ["localhost", ".", "localhost\\SQLEXPRESS", ".\
 
 const DATABASE_QUERY = "SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name";
 const COMPANY_QUERY = "SELECT SIRKOD, SIRDBNAME, SIRPATH FROM SIRKET";
+const MASTER_NAMES = ["ETA_MASTER", "ETA_MASTERV11", "ETA_MASTERV8"] as const;
 const TEMPLATE_QUERY = "SELECT TOP 1 MUHFISREFNO AS refNo FROM MUHFIS";
 const VOUCHER_QUERY =
   "SELECT TOP 5 MUHFISREFNO AS refNo, MUHFISNO AS voucherNo, MUHFISTAR AS voucherDate, MUHFISSEVNO AS versionNo, MUHFISBELTUR AS kind, MUHFISBORCTOP AS debit, MUHFISALACAKTOP AS credit FROM MUHFIS ORDER BY MUHFISREFNO DESC";
-const COMPANY_DB = /^ETA_[A-Z0-9]+_\d{4}$/;
+const COMPANY_DB = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const COMPANY_CODE = /^[\p{L}\p{N}_.-]{1,40}$/u;
 
 export interface EtaAccess {
@@ -61,7 +62,7 @@ export function localConnectionString(server: string, database: string): string 
   if (database !== "master" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(database)) {
     throw new Error("Veritabanı adı geçersiz.");
   }
-  const connectionString = `Server=${server};Database=${database};Integrated Security=True;TrustServerCertificate=True`;
+  const connectionString = `Server=${server};Database=${database};Integrated Security=True;TrustServerCertificate=True;Connect Timeout=3`;
   if (/password|pwd|user\s*id|uid\s*=/i.test(connectionString)) {
     throw new Error("SQL kullanıcı adı veya parola kullanılmaz.");
   }
@@ -75,6 +76,7 @@ export async function readMachine(
   port: SqlPort,
   listDir: (dir: string) => Promise<string[]> = async () => [],
   servers: readonly string[] = LOCAL_SQL_SERVERS,
+  log: (line: string) => void = () => {},
 ): Promise<EtaSession> {
   let fallback: EtaSession | null = null;
   for (const server of servers) {
@@ -95,12 +97,15 @@ export async function readMachine(
       server,
       readyDatabases: [],
     };
-    if (!databases.includes("ETA_MASTERV8")) {
+    const master = MASTER_NAMES.find((name) => databases.includes(name));
+    if (!master) {
+      log(`${server}: ETA veritabanı yok. ${databases.join(", ") || "veritabanı yok"}`);
       fallback ??= seen;
       continue;
     }
+    log(`${server}: ${master} bulundu.`);
 
-    const companies = await port.query(server, "ETA_MASTERV8", COMPANY_QUERY);
+    const companies = await port.query(server, master, COMPANY_QUERY);
     for (const row of companies) {
       const code = text(row, "SIRKOD");
       const database = text(row, "SIRDBNAME");

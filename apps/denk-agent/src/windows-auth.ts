@@ -77,13 +77,16 @@ export async function askWindowsUser(account: string): Promise<boolean> {
   if (process.platform !== "win32") {
     throw new WindowsAuthError("Bu ajan yalnız Windows oturumunda çalışır.");
   }
+  console.log(`Windows onayı açıldı: ${account}. Ekrandaki soruya evet deyin.`);
   const script = `
 Add-Type -AssemblyName System.Windows.Forms
 $answer = [System.Windows.Forms.MessageBox]::Show(
   ('DENK, ' + ${psSingleQuoted(account)} + ' oturumuyla bu bilgisayarda çalışsın mı?'),
   'DENK',
   [System.Windows.Forms.MessageBoxButtons]::YesNo,
-  [System.Windows.Forms.MessageBoxIcon]::Question
+  [System.Windows.Forms.MessageBoxIcon]::Question,
+  [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
+  [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly
 )
 if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { 'yes' } else { 'no' }
 `;

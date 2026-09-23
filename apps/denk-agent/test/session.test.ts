@@ -94,6 +94,8 @@ describe("hub messages", () => {
     const runtime: AgentRuntime = { pack: null, machineId: "pc-a" };
     const withRules = await handleHubMessage(runtime, { type: "rules", pack });
     const done = await handleHubMessage(withRules.runtime, { type: "job.run", jobId: "job_1" }, {
+      servers: ["localhost"],
+      log: () => {},
       sql: port({
         "master.master": [{ name: "ETA_MASTERV8" }],
         "ETA_MASTERV8.SIRKET": [{ SIRKOD: "S29", SIRDBNAME: "ETA_S29_2026", SIRPATH: "C:\\ETA\\S29" }],
@@ -119,9 +121,30 @@ describe("hub messages", () => {
     await expect(done.runtime.build?.("ETA_OTHER_2026", plan)).rejects.toThrow(/açık değil/);
   });
 
+  it("reads ETA V11 from ETA_MASTER", async () => {
+    const runtime: AgentRuntime = { pack, machineId: "pc-a" };
+    const done = await handleHubMessage(runtime, { type: "job.run", jobId: "job_1" }, {
+      servers: ["localhost"],
+      log: () => {},
+      sql: port({
+        "master.master": [{ name: "ETA_MASTER" }],
+        "ETA_MASTER.SIRKET": [{ SIRKOD: "M01", SIRDBNAME: "ETA_M01_2026", SIRPATH: "C:\\ETA\\M01" }],
+        "ETA_M01_2026.MUHFIS": [{ MUHFISREFNO: 8, MUHFISNO: "MA-000008", MUHFISISYKOD: "MERKEZ" }],
+        "ETA_M01_2026.MUHHAR": [{ MUHHARREFNO: 8, MUHHARSIRANO: 1 }],
+        "ETA_M01_2026.MUHFISIPTAL": [],
+      }),
+      listDir: async () => [],
+    });
+    expect(done.outbound?.read?.companies).toEqual(["M01"]);
+    expect(done.outbound?.read?.databases).toEqual(["ETA_MASTER"]);
+    expect(done.outbound?.status).toBe("done");
+  });
+
   it("does not open build when SQL has no ETA", async () => {
     const runtime: AgentRuntime = { pack, machineId: "pc-a" };
     const done = await handleHubMessage(runtime, { type: "job.run", jobId: "job_1" }, {
+      servers: ["localhost"],
+      log: () => {},
       sql: port({ "master.master": [{ name: "other" }] }),
     });
     expect(done.outbound?.status).toBe("empty");

@@ -4169,16 +4169,17 @@ function nextVoucherNo(snapshot) {
 var LOCAL_SQL_SERVERS = ["localhost", ".", "localhost\\SQLEXPRESS", ".\\SQLEXPRESS"];
 var DATABASE_QUERY = "SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name";
 var COMPANY_QUERY = "SELECT SIRKOD, SIRDBNAME, SIRPATH FROM SIRKET";
+var MASTER_NAMES = ["ETA_MASTER", "ETA_MASTERV11", "ETA_MASTERV8"];
 var TEMPLATE_QUERY = "SELECT TOP 1 MUHFISREFNO AS refNo FROM MUHFIS";
 var VOUCHER_QUERY = "SELECT TOP 5 MUHFISREFNO AS refNo, MUHFISNO AS voucherNo, MUHFISTAR AS voucherDate, MUHFISSEVNO AS versionNo, MUHFISBELTUR AS kind, MUHFISBORCTOP AS debit, MUHFISALACAKTOP AS credit FROM MUHFIS ORDER BY MUHFISREFNO DESC";
-var COMPANY_DB = /^ETA_[A-Z0-9]+_\d{4}$/;
+var COMPANY_DB = /^[A-Za-z_][A-Za-z0-9_]*$/;
 var COMPANY_CODE = /^[\p{L}\p{N}_.-]{1,40}$/u;
 function localConnectionString(server, database) {
   if (!/^[\w.\\-]+$/.test(server)) throw new Error("SQL sunucu ad\u0131 ge\xE7ersiz.");
   if (database !== "master" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(database)) {
     throw new Error("Veritaban\u0131 ad\u0131 ge\xE7ersiz.");
   }
-  const connectionString = `Server=${server};Database=${database};Integrated Security=True;TrustServerCertificate=True`;
+  const connectionString = `Server=${server};Database=${database};Integrated Security=True;TrustServerCertificate=True;Connect Timeout=3`;
   if (/password|pwd|user\s*id|uid\s*=/i.test(connectionString)) {
     throw new Error("SQL kullan\u0131c\u0131 ad\u0131 veya parola kullan\u0131lmaz.");
   }
@@ -4187,7 +4188,8 @@ function localConnectionString(server, database) {
   }
   return connectionString;
 }
-async function readMachine(port, listDir = async () => [], servers = LOCAL_SQL_SERVERS) {
+async function readMachine(port, listDir = async () => [], servers = LOCAL_SQL_SERVERS, log = () => {
+}) {
   let fallback = null;
   for (const server of servers) {
     let listed;
@@ -4207,11 +4209,14 @@ async function readMachine(port, listDir = async () => [], servers = LOCAL_SQL_S
       server,
       readyDatabases: []
     };
-    if (!databases.includes("ETA_MASTERV8")) {
+    const master = MASTER_NAMES.find((name) => databases.includes(name));
+    if (!master) {
+      log(`${server}: ETA veritaban\u0131 yok. ${databases.join(", ") || "veritaban\u0131 yok"}`);
       fallback ??= seen;
       continue;
     }
-    const companies = await port.query(server, "ETA_MASTERV8", COMPANY_QUERY);
+    log(`${server}: ${master} bulundu.`);
+    const companies = await port.query(server, master, COMPANY_QUERY);
     for (const row of companies) {
       const code = text(row, "SIRKOD");
       const database = text(row, "SIRDBNAME");
@@ -4460,13 +4465,16 @@ async function askWindowsUser(account) {
   if (process.platform !== "win32") {
     throw new WindowsAuthError("Bu ajan yaln\u0131z Windows oturumunda \xE7al\u0131\u015F\u0131r.");
   }
+  console.log(`Windows onay\u0131 a\xE7\u0131ld\u0131: ${account}. Ekrandaki soruya evet deyin.`);
   const script = `
 Add-Type -AssemblyName System.Windows.Forms
 $answer = [System.Windows.Forms.MessageBox]::Show(
   ('DENK, ' + ${psSingleQuoted(account)} + ' oturumuyla bu bilgisayarda \xE7al\u0131\u015Fs\u0131n m\u0131?'),
   'DENK',
   [System.Windows.Forms.MessageBoxButtons]::YesNo,
-  [System.Windows.Forms.MessageBoxIcon]::Question
+  [System.Windows.Forms.MessageBoxIcon]::Question,
+  [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
+  [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly
 )
 if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { 'yes' } else { 'no' }
 `;
@@ -4479,6 +4487,39 @@ if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { 'yes' } else { 'no' 
 
 // src/windows-sql.ts
 var execFileAsync2 = promisify2(execFile2);
+async function listLocalSqlServers() {
+  if (process.platform !== "win32") return [...LOCAL_SQL_SERVERS];
+  const script = `
+$servers = New-Object System.Collections.Generic.List[string]
+$servers.Add('localhost')
+$paths = @(
+  'HKLM:\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL',
+  'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL'
+)
+foreach ($path in $paths) {
+  if (-not (Test-Path $path)) { continue }
+  $props = Get-ItemProperty $path
+  foreach ($name in $props.PSObject.Properties.Name) {
+    if ($name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+    if ($name -eq 'MSSQLSERVER') { [void]$servers.Add('localhost') }
+    else { [void]$servers.Add(('localhost\\' + $name)) }
+  }
+}
+@($servers | Select-Object -Unique) | ConvertTo-Json -Compress
+`;
+  try {
+    const { stdout } = await execFileAsync2("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      windowsHide: true,
+      timeout: 8e3
+    });
+    const parsed = JSON.parse(stdout.trim() || "[]");
+    const names = (Array.isArray(parsed) ? parsed : [parsed]).map((item) => String(item));
+    const safe = names.filter((name) => /^[\w.\\-]+$/.test(name));
+    return safe.length > 0 ? safe : ["localhost"];
+  } catch {
+    return ["localhost"];
+  }
+}
 function windowsSqlPort() {
   return {
     query(server, database, statement) {
@@ -4565,7 +4606,8 @@ async function handleHubMessage(runtime, message, io = {}) {
   let server = null;
   let readyDatabases = [];
   try {
-    const found = await readMachine(port, io.listDir ?? listLocalDir);
+    const servers = io.servers ?? await listLocalSqlServers();
+    const found = await readMachine(port, io.listDir ?? listLocalDir, servers, io.log ?? ((line) => console.log(line)));
     access = { sql: found.sql, companies: found.companies, build: found.build };
     read = { databases: found.databases, companies: found.companies, vouchers: found.vouchers, files: found.files };
     server = found.server;

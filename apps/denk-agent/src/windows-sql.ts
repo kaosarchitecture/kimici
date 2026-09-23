@@ -1,9 +1,43 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { localConnectionString, type SqlPort } from "./eta-session.ts";
+import { LOCAL_SQL_SERVERS, localConnectionString, type SqlPort } from "./eta-session.ts";
 import { WindowsAuthError } from "./windows-auth.ts";
 
 const execFileAsync = promisify(execFile);
+
+export async function listLocalSqlServers(): Promise<string[]> {
+  if (process.platform !== "win32") return [...LOCAL_SQL_SERVERS];
+  const script = `
+$servers = New-Object System.Collections.Generic.List[string]
+$servers.Add('localhost')
+$paths = @(
+  'HKLM:\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL',
+  'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL'
+)
+foreach ($path in $paths) {
+  if (-not (Test-Path $path)) { continue }
+  $props = Get-ItemProperty $path
+  foreach ($name in $props.PSObject.Properties.Name) {
+    if ($name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+    if ($name -eq 'MSSQLSERVER') { [void]$servers.Add('localhost') }
+    else { [void]$servers.Add(('localhost\\' + $name)) }
+  }
+}
+@($servers | Select-Object -Unique) | ConvertTo-Json -Compress
+`;
+  try {
+    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      windowsHide: true,
+      timeout: 8000,
+    });
+    const parsed = JSON.parse(stdout.trim() || "[]") as unknown;
+    const names = (Array.isArray(parsed) ? parsed : [parsed]).map((item) => String(item));
+    const safe = names.filter((name) => /^[\w.\\-]+$/.test(name));
+    return safe.length > 0 ? safe : ["localhost"];
+  } catch {
+    return ["localhost"];
+  }
+}
 
 export function windowsSqlPort(): SqlPort {
   return {
