@@ -9,9 +9,11 @@ kendi bilgisayarında uygulayan SaaS.
 - Tasarım dokümanları hazır.
 - DENK ofis arşivi incelendi; onaylı alış faturası ve banka işleminden yöntem çıkarıldı.
 - İlk kod: `packages/eta-core` — veritabanı bağlantısı olmayan, test edilmiş kural çekirdeği.
+- İzinli görünüm: `packages/consent-view` — AI izin ister, Windows yerelde onaylar, ajan iter.
 
 ```bash
 cd packages/eta-core && npm install && npm test
+cd packages/consent-view && npm install && npm test && npm run demo
 ```
 
 ## Özet
@@ -21,7 +23,8 @@ cd packages/eta-core && npm install && npm test
   Ayrıntı: [docs/method.md](docs/method.md).
 - **Mimari:** İnce merkez (Cloudflare Workers + Durable Objects + D1 + R2) ve kullanıcının
   kendi makinesindeki saha ajanı. Ajan **bizim sunucuya** bağlanır; biz makineye gitmeyiz.
-  Öğrenme ve (kullanıcı açarsa) yerel ETA yazımı sahada. Merkeze yalnız sayaç gider.
+  Öğrenme sahada. Web'de fiş göstermek için AI Windows yetkisi ister; kullanıcı onaylarsa
+  ajan yalnız izinli alanları iter (`docs/consent-and-view.md`).
 - **Ajan çalışma zamanı (öneri):** Node.js / TypeScript. DENKWEB ve `eta-core` ile aynı
   dil. Karar onayınıza bağlı.
 
@@ -35,6 +38,7 @@ cd packages/eta-core && npm install && npm test
 | [docs/architecture.md](docs/architecture.md) | Bileşenler, veri sınırı, öğrenme hattı, sıra diyagramları |
 | [docs/volume.md](docs/volume.md) | İşlem hacmi modeli |
 | [docs/protocol-and-data.md](docs/protocol-and-data.md) | Kural formatı, mesaj sözleşmesi, şemalar |
+| [docs/consent-and-view.md](docs/consent-and-view.md) | Windows onayı ve izinli web görünümü |
 | [docs/security.md](docs/security.md) | Tehdit modeli, secret, KVKK notları |
 | [docs/roadmap.md](docs/roadmap.md) | Fazlar ve onay bekleyen kararlar |
 

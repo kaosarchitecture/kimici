@@ -6,8 +6,9 @@ Sistem iki parçadan oluşur:
 
 - **Merkez (Control Plane)**: Sizin işlettiğiniz sunucu. Kural kütüphanesi, örnek fişler,
   kiracı (müşteri) yönetimi, ajan kaydı, kural paketlerinin imzalanması ve dağıtımı burada
-  yapılır. Merkez **müşterinin muhasebe verisini hiçbir zaman almaz**: tutar, cari adı,
-  VKN/TCKN, açıklama metni veya fiş içeriği merkeze gelmez.
+  yapılır. Varsayılan olarak muhasebe defteri merkeze gelmez. **Tek istisna:** kullanıcı
+  Windows oturumuyla onaylarsa ajan, yalnız tiklenen alanları kısa ömürlü bir görünüme iter;
+  web arayüzü onu gösterir. Ayrıntı: `docs/consent-and-view.md`.
 - **Saha Ajanı (Edge Agent)**: Kullanıcının **kendi** kurduğu program. Herhangi bir
   makineden **bizim sunucuya** WSS ile bağlanır. Yerel ETA isteğe bağlıdır: kullanıcı
   kendi makinesinde kendi bağlantısını yazarsa ajan o makinedeki ETA ile konuşur. DENK
@@ -55,7 +56,8 @@ flowchart LR
     class SITE boundary;
 ```
 
-Kırmızı kesikli çizgi **veri egemenliği sınırıdır**. Sınırın dışına yalnızca telemetri çıkar.
+Kırmızı kesikli çizgi **veri egemenliği sınırıdır**. Sınırın dışına telemetri ve, kullanıcı
+Windows ile onayladıysa, ajanın ittiği kısa ömürlü izinli görünüm çıkar.
 
 ## 2. Bileşenler
 
@@ -298,6 +300,36 @@ sequenceDiagram
     AG->>AUD: kayıt (öneri, karar, sonuç, önceki hash)
     Note over AG,KU: Yerel ETA yoksa ajan yalnız plan ve telemetri üretir; bir ofis SQL'ine gitmez
 ```
+
+### 4.4 Windows onayı ile izinli web görünümü
+
+Asıl gösterim yolu. AI makineye gitmez; ajan zaten bize bağlıdır.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor AI as Sunucudaki AI
+    participant WEB as Web arayüzü
+    participant HUB as TenantHub
+    participant AG as Saha Ajanı
+    actor KU as Windows oturumu
+
+    AI->>WEB: Bu fişi görmek istiyorum
+    WEB->>HUB: consent.request (gerekçe + alan listesi)
+    HUB-->>AG: aynı istek (açık WSS, ajan → biz)
+    AG->>KU: Windows kimliği + alan kutuları
+    KU-->>AG: Onayla (SID, hesap; parola yok) veya Reddet
+    alt onay
+        AG->>HUB: consent.granted + view.chunk (yalnız izinli alanlar)
+        HUB-->>WEB: view.ready
+        WEB->>AI: tablo (izinli kolonlar)
+    else red
+        AG->>HUB: consent.denied
+        HUB-->>WEB: boş görünüm
+    end
+```
+
+Ayrıntı ve çalışan gösterim: `docs/consent-and-view.md`, `packages/consent-view`.
 
 ## 5. ETA'ya yazma stratejileri
 

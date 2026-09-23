@@ -74,6 +74,10 @@ Schema olarak tutulur.
 | Ajan → Merkez | `command.result` | komut kimliği, durum, hata kodu |
 | Merkez → Ajan | `ruleset.available` | sürüm, sha256, indirme yolu |
 | Merkez → Ajan | `command` | izin listesindeki komutlar: `rescan_schema`, `pause_writes`, `resume_writes`, `rollback_ruleset`, `upload_diagnostics_summary` |
+| Merkez → Ajan | `consent.request` | gerekçe, kapsam, alan listesi, süre. Windows parolası yok |
+| Ajan → Merkez | `consent.prompted` / `granted` / `denied` | yerelde doğrulanmış Windows hesap + SID; onaylanan alanlar |
+| Ajan → Merkez | `view.chunk` | yalnız grant'teki alanlar. Ajan iter; hub çekmez |
+| Merkez → Web | `view.ready` | kısa ömürlü izinli tablo. D1'e defter olarak yazılmaz |
 
 Merkezden ajana **keyfi kod, SQL veya kabuk komutu gönderilemez**. Komut tipi ajan
 tarafında sabit bir listeyle doğrulanır.
@@ -89,6 +93,10 @@ birim testiyle korunur:
 - açıklama metinleri ve belge numaraları
 - ETA kullanıcı adları (ajan bunları yerelde takma kimliğe çevirir)
 - yerel olarak öğrenilmiş kuralların koşul ve şablon içeriği
+
+İstisna: kullanıcı Windows ile `consent.granted` verdiyse `view.chunk` yalnız o anda
+onaylanan alanları taşır. Süre dolunca Hub görünümü siler. Bu istisna
+`docs/consent-and-view.md` içindedir.
 
 ## 3. Merkez veri modeli (D1)
 

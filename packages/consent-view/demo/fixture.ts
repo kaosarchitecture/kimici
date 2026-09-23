@@ -1,0 +1,51 @@
+/** Local records that live on the user machine until Windows consent. */
+export const LOCAL_MACHINE_RECORDS: Record<string, string>[] = [
+  {
+    account: "770 13",
+    side: "B",
+    amountText: "35.496,38",
+    description: "ÖRNEK MOTOR SERVİS A.Ş. - ÖRNEK ŞUBE",
+    lineDate: "2026-08-26",
+    ruleId: "R16.passenger-car.accepted-expense",
+  },
+  {
+    account: "689 01",
+    side: "B",
+    amountText: "18.255,28",
+    description: "ÖRNEK MOTOR SERVİS A.Ş. - ÖRNEK ŞUBE",
+    lineDate: "2026-08-26",
+    ruleId: "R16.passenger-car.kkeg",
+  },
+  {
+    account: "191 02 20",
+    side: "B",
+    amountText: "7.099,28",
+    description: "İND.KDV.",
+    lineDate: "2026-08-26",
+    ruleId: "R16.passenger-car.accepted-vat",
+  },
+  {
+    account: "320 A=014",
+    side: "A",
+    amountText: "60.850,94",
+    description: "N.FT İLE ALIŞ",
+    lineDate: "2026-08-26",
+    ruleId: "R13.nft.supplier",
+  },
+  {
+    account: "950 01",
+    side: "B",
+    amountText: "18.255,28",
+    description: "K.K.E.GİDERLER",
+    lineDate: "2026-08-26",
+    ruleId: "R16.passenger-car.memo",
+  },
+  {
+    account: "951 01",
+    side: "A",
+    amountText: "18.255,28",
+    description: "K.K.E.GİDERLER",
+    lineDate: "2026-08-26",
+    ruleId: "R16.passenger-car.memo",
+  },
+];

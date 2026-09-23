@@ -25,6 +25,8 @@ ve parolalar DENK ürününün parçası değildir ve bu depoda yoktur.
 
 - Merkez paneli: operatör hesapları, MFA. Kimlik sağlayıcı onaya bağlı.
 - Ajan: cihaz anahtarı + kayıt kodu. Kullanıcı kendi makinesinden bize bağlanır.
+- Windows onayı: ajan yerelde etkileşimli oturumu okur (`DOMAIN\kullanıcı` + SID).
+  Parola, NTLM özeti ve `sa` sunucuya gelmez. Onaylanan alanlar kısa ömürlü görünümdür.
 - Yerel ETA: isteğe bağlı. Kullanıcı kendi makinesinde kendi bağlantısını yazarsa çalışır.
   DENK bir SQL kullanıcısı açmaz, ofis hesabı istemez, `sa` / ortak uygulama hesabı kullanmaz.
 
@@ -38,7 +40,9 @@ ve parolalar DENK ürününün parçası değildir ve bu depoda yoktur.
 
 Bu notlar hukuki görüş değildir.
 
-- Muhasebe içeriği merkeze gelmez. Telemetri yalnız sayaç ve kural kimliğidir.
+- Varsayılan: muhasebe içeriği merkeze gelmez. Telemetri yalnız sayaç ve kural kimliğidir.
+- Windows onaylı görünüm: kullanıcı tiklediği alanları, süre bitene kadar web arayüzünde
+  görmeyi kabul eder. Defter olarak saklanmaz.
 - Aydınlatma metni ve sözleşme yine de gerekir.
 - Cloudflare kullanılırsa merkeze kişisel veri gitmediği varsayımı, gizlilik filtresi
   testleriyle doğrulanmalıdır.
@@ -48,6 +52,7 @@ Bu notlar hukuki görüş değildir.
 Aşağıdakiler açık onay ister:
 
 - Kullanıcının kendi makinesinde yerel yazmayı ilk kez açması
+- Windows oturumuyla izinli görünüm açılması (her istekte yeniden)
 - Bir kuralın `OtomatikYazma` durumuna alınması
 - Ajan iptali ve yerel verinin silinmesi
 - Merkez D1 production migration'ı (önce staging)

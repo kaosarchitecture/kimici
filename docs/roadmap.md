@@ -26,15 +26,14 @@ DENK bir ofis SQL'ine bağlanmaz):
 ## Faz 1: Salt okunur ajan ve merkez iskeleti
 
 - Merkez: API Worker, TenantHub Durable Object, D1 migration'ları (staging), ajan kaydı,
-  Türkçe yönetim paneli iskeleti.
+  Türkçe yönetim paneli, **Windows onaylı izinli görünüm** (`packages/consent-view`).
 - Ajan: Windows servisi, enrollment, **bizim sunucuya** WSS, gizlilik filtresi, telemetri.
-  Yerel ETA (şema keşfi / geçmiş / artımlı okuma) yalnız kullanıcı kendi makinesinde
-  açarsa.
+  Yerel ETA yalnız kullanıcı kendi makinesinde açarsa. İzinli görünüm için ajan yerelde
+  Windows oturumunu doğrular; parola göndermez.
 - `packages/protocol` şemaları.
 
-Kabul ölçütü: herhangi bir makinedeki ajan merkeze bağlanır, yalnız sayaç gönderir.
-Gizlilik filtresi testleri yasaklı alanların hiçbirinin çıkmadığını kanıtlar. Yerel ETA
-zorunlu değildir.
+Kabul ölçütü: ajan merkeze bağlanır. AI izin ister; kullanıcı Windows ile onaylarsa web
+tablosu yalnız tiklenen alanları gösterir. Onaysız muhasebe içeriği merkeze çıkmaz.
 
 ## Faz 2: Öğrenme ve gölge mod
 
