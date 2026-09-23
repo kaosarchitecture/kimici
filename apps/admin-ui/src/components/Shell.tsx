@@ -10,6 +10,11 @@ const LINKS: { id: PageId; href: string; label: string }[] = [
 export function Shell(props: { page: PageId; children: ReactNode }) {
   return (
     <div className="app">
+      <div className="aurora" aria-hidden>
+        <i className="orb orb-a" />
+        <i className="orb orb-b" />
+        <i className="orb orb-c" />
+      </div>
       <aside className="rail">
         <div className="brand">
           <img className="brand-denk" src="/brand/denk.png" alt="DENK" />

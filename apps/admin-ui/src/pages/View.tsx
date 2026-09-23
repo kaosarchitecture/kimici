@@ -178,7 +178,7 @@ export function View() {
         </div>
         {error ? <p className="lede">{error}</p> : null}
       </section>
-      <section className="sheet" style={{ marginTop: "1rem" }}>
+      <section className="sheet">
         <h2>İtilen satırlar</h2>
         {records.length === 0 ? (
           <p className="empty">Henüz izinli satır yok. Ajan bu makinede evrakı işler, sonra buraya iter.</p>
