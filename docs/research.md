@@ -71,11 +71,17 @@ Doğrulanan (kamuya açık kaynaklar):
   entegrasyonlar doğrudan SQL/ODBC, XML web servisi veya aktarım araçlarıyla yapılıyor
   ([datakent](http://www.datakent.com/eta_sql_entegrasyonlari.asp)).
 
-Doğrulanamayan, Faz 0'da hedef makinede keşfedilmesi gerekenler:
+DENK ofis arşivinden doğrulananlar (ETA V.8 SQL; ayrıntı `docs/denk-analysis.md`):
 
-- Muhasebe fişi başlık ve satır tablolarının adları ve kolonları (`MUHFIS` / `MUHHAR` gibi
-  adlar tahmin; **doğrulanmadı**).
-- Log ve audit tablolarının fiziksel adları, saklama süreleri ve kolon anlamları.
-- Fiş numarası ve evrak serisi üretim mantığı (doğrudan SQL ile yazarken kritik).
-- ETA'ya doğrudan SQL ile yazmanın lisans ve destek şartlarına uygun olup olmadığı.
-- ETA'nın resmi bir içe aktarım (Excel/XML) yolu olup olmadığı ve hangi sürümlerde bulunduğu.
+- Muhasebe fişi: `MUHFIS` + `MUHHAR`, iptal `MUHFISIPTAL` / `MUHHARIPTAL`.
+- Mizan: `MUHMIZDEGER`. SQL yazımından sonra yeniden hesaplanmazsa ETA bakiyeyi eski gösterir.
+- Hesap planı: `MUHHESAP`. Kod biçimi boşluklu seviye (`191 02 20`).
+- Karakter seti: Windows-1254. Fiş no: `MA-000000`. Görünürlük: `MUHFISISYKOD = 'MERKEZ'`.
+- Ofis pratiği doğrudan SQL yazımıdır (onaylı işlemler). Lisans / destek teyidi hâlâ gerekli.
+
+Hâlâ doğrulanması gerekenler:
+
+- `MUHMIZDEGER` içinde `MUHRAKTIP` / döviz satırı var mı (scriptler ayı silip yalnız tip 1 yazıyor).
+- Banka altın örneğinin canlı fiş gruplaması (arşivdeki script ile log çelişiyor).
+- ETA'ya doğrudan SQL ile yazmanın lisans ve destek şartlarına uygunluğu.
+- Resmi içe aktarım yolunun varlığı.

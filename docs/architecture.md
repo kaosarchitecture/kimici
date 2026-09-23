@@ -35,7 +35,7 @@ flowchart LR
 
     subgraph SITE["MÜŞTERİ BİLGİSAYARI (veri burada kalır)"]
         direction TB
-        AG["Saha Ajanı<br/>Windows Service (.NET)"]
+        AG["Saha Ajanı<br/>Windows Service (Node.js)"]
         LS[("Yerel Öğrenme Deposu<br/>şifreli SQLite")]
         LUI["Yerel Onay Arayüzü (TR)<br/>127.0.0.1"]
         ETA[("ETA SQL Server<br/>fiş · log · audit")]
@@ -110,7 +110,7 @@ flowchart TB
 
         subgraph DECIDE["Karar"]
             MAP["Hesap Eşleyici<br/>TDHP → yerel alt hesap"]
-            ENG["Kural Motoru<br/>JsonLogic"]
+            ENG["Kural Motoru<br/>eta-core + geçmiş profil"]
             LLM["İsteğe bağlı yerel LLM<br/>(yalnız belirsizlikte)"]
             GATE["Önemlilik Kapısı<br/>otomatik / onaylı / bloklu"]
         end
@@ -307,45 +307,25 @@ arkasında tutacak şekilde tasarlanır.
 | B. Doğrudan SQL (transaction içinde) | Hızlı, tam kontrol | Fiş numarası, bakiye ve entegrasyon tablolarının tutarlılığı bizim sorumluluğumuzda; ETA güncellemesinde kırılabilir; lisans ve destek şartlarına uygunluğu **doğrulanmadı** |
 | C. UI otomasyonu | ETA'nın iş kurallarını birebir kullanır | Yavaş, kırılgan, oturum açık kullanıcı gerekir |
 
-B stratejisi seçilirse zorunlu korumalar şunlardır: ayrı ve en az yetkili SQL kullanıcısı,
-yazmadan önce ETA veritabanı yedeğinin varlığının kontrolü, tek transaction, yazma sonrası
-borç/alacak eşitliği ve bakiye doğrulaması, her yazma için tersini alan geri alma kaydı.
+DENK ofis arşivindeki onaylı işlemler strateji B'yi kullanıyor (şablon klon + tek
+transaction + mizan rebuild). Lisans teyidi hâlâ açık. B seçilirse zorunlu korumalar:
+ayrı ve en az yetkili SQL kullanıcısı, yazmadan önce yedek kontrolü, tek transaction,
+yazma sonrası borç/alacak ve hex denetimi, REF bazlı geri alma. Yapay zeka SQL yazmaz;
+satırları `packages/eta-core` üretir.
 
 ## 6. Önerilen depo iskeleti (monorepo)
 
-Bu iskelet onaydan sonra oluşturulacak. Şu an yalnızca plan.
-
 ```
 .
-├── apps/
-│   ├── control-plane/            # Cloudflare Worker (TypeScript)
-│   │   ├── src/
-│   │   │   ├── index.ts          # router: /api, /agents, /ws
-│   │   │   ├── tenant-hub.ts     # Durable Object (WebSocket Hibernation)
-│   │   │   ├── rules/            # JsonLogic doğrulama, simülasyon, paketleme
-│   │   │   ├── signing/          # Ed25519 imzalama
-│   │   │   └── db/               # D1 sorguları
-│   │   ├── migrations/           # D1 migration'ları (önce staging)
-│   │   └── wrangler.jsonc
+├── apps/                         # henüz yok (onay sonrası)
+│   ├── control-plane/            # Cloudflare Worker
 │   └── admin-ui/                 # React, Türkçe arayüz
-├── agent/                        # .NET 10 Windows Service
-│   ├── src/
-│   │   ├── Agent.Host/           # servis girişi, DI, yapılandırma
-│   │   ├── Agent.Connectivity/   # WSS istemcisi, enrollment, yeniden bağlanma
-│   │   ├── Agent.Eta/            # şema keşfi, okuyucular, yazma adaptörleri
-│   │   ├── Agent.Learning/       # özellik çıkarma, şablon imzası, madencilik (ML.NET)
-│   │   ├── Agent.Rules/          # JsonLogic motoru, hesap eşleyici, önemlilik kapısı
-│   │   ├── Agent.Audit/          # hash zincirli denetim izi
-│   │   ├── Agent.Privacy/        # telemetri allow-list filtresi
-│   │   └── Agent.LocalUi/        # 127.0.0.1 onay arayüzü (Türkçe)
-│   ├── tests/
-│   └── installer/                # MSI, kod imzalama
+├── agent/                        # henüz yok — öneri: Node.js Windows servisi
 ├── packages/
-│   ├── protocol/                 # JSON Schema: ajan ↔ merkez mesajları (tek kaynak)
-│   └── rule-schema/              # kural paketi JSON Schema + örnek setleri
+│   └── eta-core/                 # VAR: deterministik kural + yazıcı (DB yok)
 ├── docs/
 └── .env.example
 ```
 
-`packages/protocol` ve `packages/rule-schema` tek doğruluk kaynağıdır. TypeScript ve C#
-tipleri bu şemalardan üretilir. Böylece merkez ile ajan arasında sözleşme kayması olmaz.
+`packages/eta-core` hem merkez simülasyonunda hem saha ajanında aynı kod olarak çalışır.
+Yapay zeka yalnızca bu paketin planlayıcılarını çağırır.

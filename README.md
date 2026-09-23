@@ -1,32 +1,40 @@
-# ETA Saha Öğrenme Platformu (tasarım aşaması)
+# DENK — ETA saha öğrenme platformu
 
 Muhasebe kurallarını operatörün verdiği örneklerden ve müşterinin ETA programındaki geçmiş
-davranışlarından (fiş, log, audit) öğrenen, bu kuralları **müşteri verisini merkeze
-taşımadan** müşterinin kendi bilgisayarında uygulayan SaaS.
+davranışlarından öğrenen, bu kuralları **müşteri verisini merkeze taşımadan** müşterinin
+kendi bilgisayarında uygulayan SaaS.
 
-Bu depo şu an yalnızca tasarım dokümanlarını içerir. Kod, kararlar onaylandıktan sonra
-`docs/architecture.md` içindeki iskelete göre yazılacak.
+## Durum
+
+- Tasarım dokümanları hazır.
+- DENK ofis arşivi incelendi; onaylı alış faturası ve banka işleminden yöntem çıkarıldı.
+- İlk kod: `packages/eta-core` — veritabanı bağlantısı olmayan, test edilmiş kural çekirdeği.
+
+```bash
+cd packages/eta-core && npm install && npm test
+```
 
 ## Özet
 
-- **Hazır repo yok.** Bu kombinasyonu yapan olgun bir açık kaynak proje bulunamadı. En yakın
-  aday AGPL lisanslı ve çok genç. Ayrıntılar: [docs/research.md](docs/research.md).
-- **Mimari:** İnce bir merkez (Cloudflare Workers + Durable Objects + D1 + R2) ve müşteri
-  makinesinde çalışan bir .NET Windows servisi (saha ajanı). Öğrenme, karar ve ETA'ya yazma
-  sahada yapılır. Merkeze yalnızca içeriksiz sayaçlar gider.
-- **Hacim:** Merkez yükü fiş sayısıyla değil, ajan sayısıyla büyür. 10.000 ajanda bile
-  merkezde darboğaz yok. Asıl kapasite riski büyük bürolarda yerel disk ve geçmiş yükleme
-  süresi.
+- **Hazır repo yok.** Bu kombinasyonu yapan olgun bir açık kaynak proje bulunamadı.
+- **Yöntem:** Yapay zeka SQL yazmaz. Plan önerir; yazmayı yalnız `eta-core` yapar.
+  Ayrıntı: [docs/method.md](docs/method.md).
+- **Mimari:** İnce merkez (Cloudflare Workers + Durable Objects + D1 + R2) ve ofis
+  makinesinde çalışan saha ajanı. Öğrenme ve ETA yazımı sahada. Merkeze yalnız sayaç gider.
+- **Ajan çalışma zamanı (öneri):** Node.js / TypeScript. DENKWEB ve `eta-core` ile aynı
+  dil. Karar onayınıza bağlı.
 
 ## Dokümanlar
 
 | Doküman | İçerik |
 |---|---|
-| [docs/research.md](docs/research.md) | Açık kaynak aday değerlendirmesi, ETA hakkında doğrulanan ve doğrulanamayan bilgiler |
-| [docs/architecture.md](docs/architecture.md) | Bileşenler, veri egemenliği sınırı, öğrenme hattı, kural yaşam döngüsü, sıra diyagramları, depo iskeleti |
-| [docs/volume.md](docs/volume.md) | İşlem hacmi modeli: saha profilleri, geçmiş yükleme, otomasyon hunisi, merkez ölçek senaryoları, platform sınırları |
-| [docs/protocol-and-data.md](docs/protocol-and-data.md) | Kural formatı, imzalı paket, ajan ↔ merkez mesajları, telemetri izin listesi, D1 ve yerel SQLite şemaları |
-| [docs/security.md](docs/security.md) | Tehdit modeli, kimlik, secret yönetimi, KVKK notları, geri alınamaz işlemler |
-| [docs/roadmap.md](docs/roadmap.md) | Fazlar, kabul ölçütleri, onay bekleyen kararlar |
+| [docs/method.md](docs/method.md) | Rafine yöntem: yetenek kataloğu, plan → onay → yaz → denetle |
+| [docs/denk-analysis.md](docs/denk-analysis.md) | DENK arşivi: doğrulanan ETA tabloları, çelişkiler, güvenlik |
+| [docs/research.md](docs/research.md) | Açık kaynak aday değerlendirmesi |
+| [docs/architecture.md](docs/architecture.md) | Bileşenler, veri sınırı, öğrenme hattı, sıra diyagramları |
+| [docs/volume.md](docs/volume.md) | İşlem hacmi modeli |
+| [docs/protocol-and-data.md](docs/protocol-and-data.md) | Kural formatı, mesaj sözleşmesi, şemalar |
+| [docs/security.md](docs/security.md) | Tehdit modeli, secret, KVKK notları |
+| [docs/roadmap.md](docs/roadmap.md) | Fazlar ve onay bekleyen kararlar |
 
-Diyagramlar Mermaid formatındadır ve GitHub üzerinde doğrudan görüntülenir.
+Bu depo herkese açıktır. Müşteri adı, VKN, parola veya portal hesabı burada yer almaz.
