@@ -164,6 +164,34 @@ button.warn {
 }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 .row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; }
+a.as-btn {
+  display: inline-block;
+  text-decoration: none;
+  border: 1px solid var(--pine);
+  background: var(--pine);
+  color: #f4efe4;
+  padding: 0.48rem 0.85rem;
+}
+a.as-btn.ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 180px;
+  margin-top: 1rem;
+  border: 2px dashed var(--pine-mid);
+  background: #f7f2e8;
+  cursor: pointer;
+}
+.drop input { display: none; }
+.drop strong { font-size: 1.15rem; }
+.drop span { color: var(--mute); font-size: 0.88rem; }
 
 table.ledger {
   width: 100%;

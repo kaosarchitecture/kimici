@@ -2,10 +2,11 @@ import type { ReactNode } from "react";
 import { STATUS_LABELS } from "../labels.ts";
 import type { HubStatus } from "../types.ts";
 
-export type PageId = "yazdir" | "calisma" | "onay" | "ajan";
+export type PageId = "evrak" | "yazdir" | "calisma" | "onay" | "ajan";
 
 const LINKS: { id: PageId; href: string; label: string }[] = [
-  { id: "yazdir", href: "#/", label: "Fiş yazdır" },
+  { id: "evrak", href: "#/", label: "Evrak" },
+  { id: "yazdir", href: "#/yazdir", label: "Fiş yazdır" },
   { id: "calisma", href: "#/calisma", label: "Çalışma" },
   { id: "onay", href: "#/onay", label: "Windows onayı" },
   { id: "ajan", href: "#/ajan", label: "Ajan" },

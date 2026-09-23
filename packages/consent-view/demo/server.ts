@@ -6,6 +6,10 @@ import { ConsentHub } from "../src/hub.ts";
 import { demoWindowsIdentity } from "../src/windows.ts";
 import { VIEW_FIELDS, type ViewField } from "../src/types.ts";
 import { LOCAL_MACHINE_RECORDS } from "./fixture.ts";
+import { documentFromFile, type UploadedDocument } from "../src/ubl.ts";
+
+const MAX_EVRAK = 5 * 1024 * 1024;
+let lastEvrak: UploadedDocument | null = null;
 
 const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
 const hub = new ConsentHub();
@@ -65,6 +69,27 @@ const server = createServer(async (req, res) => {
 
     if (method === "GET" && url.pathname === "/api/state") {
       return json(res, 200, hub.snapshot());
+    }
+
+    if (method === "GET" && url.pathname === "/api/evrak") {
+      return json(res, 200, { document: lastEvrak });
+    }
+
+    if (method === "POST" && url.pathname === "/api/evrak") {
+      const body = (await readBody(req)) as {
+        fileName?: string;
+        mime?: string;
+        contentBase64?: string;
+      };
+      const fileName = (body.fileName ?? "evrak").slice(0, 200);
+      const mime = body.mime ?? "application/octet-stream";
+      const raw = body.contentBase64 ?? "";
+      const buf = Buffer.from(raw, "base64");
+      if (buf.length === 0) return json(res, 400, { error: "Dosya boş." });
+      if (buf.length > MAX_EVRAK) return json(res, 400, { error: "Dosya 5 MB üstü olamaz." });
+      const asText = buf.toString("utf8");
+      lastEvrak = documentFromFile(fileName, mime, buf.length, asText);
+      return json(res, 200, { document: lastEvrak });
     }
 
     if (method === "GET" && url.pathname === "/api/events") {

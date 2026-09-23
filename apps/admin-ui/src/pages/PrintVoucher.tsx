@@ -1,40 +1,63 @@
-import { PRINT_VOUCHER } from "../voucher.ts";
+import { useEffect, useState } from "react";
+import { PRINT_VOUCHER, voucherFromEvrak, type PrintVoucher as Voucher } from "../voucher.ts";
+import type { Evrak } from "./Upload.tsx";
 
 export function PrintVoucher() {
+  const [voucher, setVoucher] = useState<Voucher>(PRINT_VOUCHER);
+  const [fromUpload, setFromUpload] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/evrak")
+      .then((res) => res.json())
+      .then((body: { document?: Evrak | null }) => {
+        if (body.document) {
+          setVoucher(voucherFromEvrak(body.document));
+          setFromUpload(true);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
   return (
     <div className="print-wrap">
       <div className="print-bar no-print">
         <p>
-          Bu fiş bu sunucuda yazıldı. Başka bir bilgisayar bu sayfayı açıp yazdırabilir.
-          ETA SQL’ine bağlanılmaz.
+          {fromUpload
+            ? "Bu fiş yüklenen evraktan üretildi. ETA SQL’ine bağlanılmaz."
+            : "Henüz evrak yok. Önce ana sayfadan yükleyin; yoksa örnek fiş yazdırılır."}
         </p>
-        <button type="button" onClick={() => window.print()}>
-          Fişi yazdır
-        </button>
+        <div className="row" style={{ marginTop: 0 }}>
+          <a className="as-btn ghost" href="#/">
+            Evrak yükle
+          </a>
+          <button type="button" onClick={() => window.print()}>
+            Fişi yazdır
+          </button>
+        </div>
       </div>
 
       <article className="fis" id="fis-kagit">
         <header className="fis-head">
           <div>
-            <p className="fis-co">{PRINT_VOUCHER.company}</p>
+            <p className="fis-co">{voucher.company}</p>
             <h1>Muhasebe fişi</h1>
           </div>
           <dl>
             <div>
               <dt>Fiş no</dt>
-              <dd>{PRINT_VOUCHER.number}</dd>
+              <dd>{voucher.number}</dd>
             </div>
             <div>
               <dt>Tarih</dt>
-              <dd>{PRINT_VOUCHER.date}</dd>
+              <dd>{voucher.date}</dd>
             </div>
             <div>
               <dt>Tür</dt>
-              <dd>{PRINT_VOUCHER.kind}</dd>
+              <dd>{voucher.kind}</dd>
             </div>
           </dl>
         </header>
-        <p className="fis-note">{PRINT_VOUCHER.note}</p>
+        <p className="fis-note">{voucher.note}</p>
         <table>
           <thead>
             <tr>
@@ -47,7 +70,7 @@ export function PrintVoucher() {
             </tr>
           </thead>
           <tbody>
-            {PRINT_VOUCHER.lines.map((line) => (
+            {voucher.lines.map((line) => (
               <tr key={line.seq} className={line.description === "İND.KDV." ? "vat" : undefined}>
                 <td>{line.seq}</td>
                 <td>{line.account}</td>
@@ -60,9 +83,8 @@ export function PrintVoucher() {
           </tbody>
         </table>
         <footer className="fis-foot">
-          <span>Borç {PRINT_VOUCHER.debit}</span>
-          <span>Alacak {PRINT_VOUCHER.credit}</span>
-          <span>Fark 0,00</span>
+          <span>Borç {voucher.debit}</span>
+          <span>Alacak {voucher.credit}</span>
         </footer>
         <div className="fis-sign">
           <span>Düzenleyen</span>
