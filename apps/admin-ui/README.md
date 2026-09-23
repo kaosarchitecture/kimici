@@ -1,13 +1,12 @@
 # DENK çalışma alanı
 
-Sıfırdan yazılmış Türkçe operatör arayüzü. DENKWEB değildir; onun ekranları kopyalanmadı.
+Sıfırdan yazılmış Türkçe arayüz. DENKWEB değildir.
 
-- `/#/` Çalışma: AI izin ister, izinli fiş tablosu burada görünür.
-- `/#/onay` Windows onay yüzeyi (canlıda ajanın yerelde açtığı pencere).
-- `/#/ajan` Bağlantı yönü. SQL / parola formu yok.
+- `/#/` AI — evrak yükle, Workers AI ile konuş
+- `/#/yazdir` Yüklenen evraktan fiş yazdır
 
 ```bash
 npm install && npm run build
 ```
 
-API ile birlikte: `packages/consent-view` içinde `npm run demo` → http://127.0.0.1:8788
+Canlı bağ: `denk-app` Worker (`env.AI` → `@cf/meta/llama-3.1-8b-instruct`).

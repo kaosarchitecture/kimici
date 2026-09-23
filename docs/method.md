@@ -6,8 +6,10 @@ ekstresi, geri alma, şirket sağlık kontrolü) güvenle yapan bir yapay zeka a
 
 ## 1. İlke
 
-1. **Yapay zeka SQL yazmaz.** Doğal dil komutunu anlar, doğru yeteneği seçer, belirsizlikte
-   soru sorar ve bir **plan** üretir.
+1. **Yapay zeka SQL yazmaz.** Konuşma `denk-app` Worker’da Cloudflare Workers AI
+   (`@cf/meta/llama-3.1-8b-instruct`) ile yapılır. Doğal dil komutunu anlar, doğru yeteneği
+   seçer, belirsizlikte soru sorar ve bir **plan** üretir. Modele müşteri defteri gitmez;
+   yalnız kullanıcının yüklediği evrak özeti gider.
 2. **Tutarı ve hesabı kural motoru belirler.** Kural motoru deterministiktir ve onaylı
    işlemlere karşı test edilmiştir.
 3. **Yazmadan önce değişmez kurallar (guard) çalışır.** Tek bir ihlal varsa yazma yapılmaz.

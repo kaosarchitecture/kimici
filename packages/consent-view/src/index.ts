@@ -1,6 +1,14 @@
+export {
+  buildChatMessages,
+  documentContext,
+  extractModelText,
+  SYSTEM_PROMPT,
+  WORKERS_AI_MODEL,
+} from "./ai.ts";
 export { ConsentHub } from "./hub.ts";
 export { filterRecords, isViewField, sanitizeFields } from "./filter.ts";
 export { attestWindowsIdentity, demoWindowsIdentity } from "./windows.ts";
+export { documentFromFile, parseUblInvoice, type UploadedDocument } from "./ubl.ts";
 export {
   SCOPE_LABELS,
   SCOPES,

@@ -2,19 +2,16 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ConsentHub } from "../src/hub.ts";
-import { demoWindowsIdentity } from "../src/windows.ts";
-import { VIEW_FIELDS, type ViewField } from "../src/types.ts";
-import { LOCAL_MACHINE_RECORDS } from "./fixture.ts";
+import { buildChatMessages, extractModelText, WORKERS_AI_MODEL } from "../src/ai.ts";
 import { documentFromFile, type UploadedDocument } from "../src/ubl.ts";
 
 const MAX_EVRAK = 5 * 1024 * 1024;
 let lastEvrak: UploadedDocument | null = null;
 
 const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
-const hub = new ConsentHub();
-const clients = new Set<ServerResponse>();
 const PORT = Number(process.env.PORT ?? 8788);
+const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
+const TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? "";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -36,11 +33,6 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function broadcast(): void {
-  const payload = `data: ${JSON.stringify(hub.snapshot())}\n\n`;
-  for (const client of clients) client.write(payload);
-}
-
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -48,11 +40,33 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-function asFields(value: unknown): ViewField[] {
-  if (!Array.isArray(value)) return [...VIEW_FIELDS];
-  return value.filter((item): item is ViewField =>
-    (VIEW_FIELDS as readonly string[]).includes(String(item)),
+async function runWorkersAi(messages: ReturnType<typeof buildChatMessages>): Promise<string> {
+  if (!ACCOUNT || !TOKEN) {
+    throw new Error(
+      "Workers AI bağlı değil. denk-app Worker’ını Cloudflare’e yükleyin (wrangler deploy). Binding: env.AI → " +
+        WORKERS_AI_MODEL +
+        ". Yerel deneme için CLOUDFLARE_ACCOUNT_ID ve CLOUDFLARE_API_TOKEN ortam değişkeni gerekir; koda yazılmaz.",
+    );
+  }
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${WORKERS_AI_MODEL}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ messages }),
+    },
   );
+  const payload = (await res.json()) as { result?: unknown; errors?: Array<{ message?: string }> };
+  if (!res.ok) {
+    const hint = payload.errors?.[0]?.message ?? `HTTP ${res.status}`;
+    throw new Error(`Workers AI cevap vermedi: ${hint}`);
+  }
+  const reply = extractModelText(payload.result ?? payload);
+  if (!reply) throw new Error("Model boş cevap verdi.");
+  return reply;
 }
 
 const server = createServer(async (req, res) => {
@@ -67,8 +81,20 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (method === "GET" && url.pathname === "/api/state") {
-      return json(res, 200, hub.snapshot());
+    if (method === "GET" && url.pathname === "/api/ai") {
+      return json(res, 200, {
+        connected: Boolean(ACCOUNT && TOKEN),
+        model: WORKERS_AI_MODEL,
+        via: ACCOUNT && TOKEN ? "workers-ai-rest" : "disconnected",
+        where: "denk-app Worker · Cloudflare Workers AI · müşteri makinesine gitmez",
+      });
+    }
+
+    if (method === "POST" && url.pathname === "/api/ai") {
+      const body = (await readBody(req)) as { message?: string; document?: UploadedDocument | null };
+      const doc = body.document?.fileName ? body.document : lastEvrak;
+      const reply = await runWorkersAi(buildChatMessages(body.message ?? "", doc));
+      return json(res, 200, { reply, model: WORKERS_AI_MODEL, via: "workers-ai-rest" });
     }
 
     if (method === "GET" && url.pathname === "/api/evrak") {
@@ -83,65 +109,11 @@ const server = createServer(async (req, res) => {
       };
       const fileName = (body.fileName ?? "evrak").slice(0, 200);
       const mime = body.mime ?? "application/octet-stream";
-      const raw = body.contentBase64 ?? "";
-      const buf = Buffer.from(raw, "base64");
+      const buf = Buffer.from(body.contentBase64 ?? "", "base64");
       if (buf.length === 0) return json(res, 400, { error: "Dosya boş." });
       if (buf.length > MAX_EVRAK) return json(res, 400, { error: "Dosya 5 MB üstü olamaz." });
-      const asText = buf.toString("utf8");
-      lastEvrak = documentFromFile(fileName, mime, buf.length, asText);
+      lastEvrak = documentFromFile(fileName, mime, buf.length, buf.toString("utf8"));
       return json(res, 200, { document: lastEvrak });
-    }
-
-    if (method === "GET" && url.pathname === "/api/events") {
-      res.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-      });
-      res.write(`data: ${JSON.stringify(hub.snapshot())}\n\n`);
-      clients.add(res);
-      req.on("close", () => clients.delete(res));
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/api/ai/request") {
-      const body = (await readBody(req)) as { purpose?: string; fields?: string[] };
-      const request = hub.requestView({
-        purpose: body.purpose ?? "Ağustos alış faturası önizlemesi",
-        fields: asFields(body.fields),
-      });
-      hub.markPrompted(request.requestId, demoWindowsIdentity());
-      broadcast();
-      return json(res, 200, hub.snapshot());
-    }
-
-    if (method === "POST" && url.pathname === "/api/agent/grant") {
-      const body = (await readBody(req)) as { fields?: string[] };
-      const snap = hub.snapshot();
-      if (!snap.request) return json(res, 400, { error: "Bekleyen izin isteği yok." });
-      const grant = hub.grant(snap.request.requestId, {
-        identity: demoWindowsIdentity(),
-        fields: asFields(body.fields ?? snap.request.fields),
-      });
-      hub.pushView(grant.grantId, LOCAL_MACHINE_RECORDS);
-      broadcast();
-      return json(res, 200, hub.snapshot());
-    }
-
-    if (method === "POST" && url.pathname === "/api/agent/deny") {
-      const snap = hub.snapshot();
-      if (!snap.request) return json(res, 400, { error: "Bekleyen izin isteği yok." });
-      hub.deny(snap.request.requestId, "Kullanıcı Windows onayını reddetti.");
-      broadcast();
-      return json(res, 200, hub.snapshot());
-    }
-
-    if (method === "POST" && url.pathname === "/api/revoke") {
-      const snap = hub.snapshot();
-      if (!snap.grant) return json(res, 400, { error: "Geri alınacak onay yok." });
-      hub.revoke(snap.grant.grantId);
-      broadcast();
-      return json(res, 200, hub.snapshot());
     }
 
     if (method === "GET") {
@@ -164,10 +136,16 @@ const server = createServer(async (req, res) => {
     json(res, 404, { error: "bulunamadı" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Hata";
-    json(res, 400, { error: message });
+    const status = message.includes("bağlı değil") ? 503 : 400;
+    json(res, status, { error: message });
   }
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`DENK arayüz: http://0.0.0.0:${PORT}`);
+  console.log(`DENK: http://0.0.0.0:${PORT}`);
+  console.log(
+    ACCOUNT && TOKEN
+      ? `AI: Workers AI REST ${WORKERS_AI_MODEL}`
+      : `AI bağlı değil — wrangler deploy ile denk-app + env.AI`,
+  );
 });

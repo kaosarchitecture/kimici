@@ -99,6 +99,8 @@ body {
 .pill.wait { background: var(--wait-bg); color: var(--wait); }
 .pill.bad { background: var(--bad-bg); color: var(--bad); }
 
+.desk-ai { max-width: 720px; }
+.desk-ai .thread { max-height: 42vh; overflow: auto; }
 .desk {
   display: grid;
   grid-template-columns: minmax(280px, 360px) 1fr;

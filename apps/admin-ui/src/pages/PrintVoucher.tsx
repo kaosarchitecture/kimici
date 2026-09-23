@@ -1,55 +1,59 @@
 import { useEffect, useState } from "react";
-import { PRINT_VOUCHER, voucherFromEvrak, type PrintVoucher as Voucher } from "../voucher.ts";
-import type { Evrak } from "./Upload.tsx";
+import { voucherFromEvrak, type PrintVoucher as Voucher } from "../voucher.ts";
+import type { Evrak } from "./types.ts";
 
 export function PrintVoucher() {
-  const [voucher, setVoucher] = useState<Voucher>(PRINT_VOUCHER);
-  const [fromUpload, setFromUpload] = useState(false);
+  const [voucher, setVoucher] = useState<Voucher | null>(null);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     fetch("/api/evrak")
       .then((res) => res.json())
       .then((body: { document?: Evrak | null }) => {
-        if (body.document) {
-          setVoucher(voucherFromEvrak(body.document));
-          setFromUpload(true);
-        }
+        if (body.document) setVoucher(voucherFromEvrak(body.document));
+        else setMissing(true);
       })
-      .catch(() => undefined);
+      .catch(() => setMissing(true));
   }, []);
+
+  if (!voucher) {
+    return (
+      <section className="sheet" style={{ maxWidth: 520 }}>
+        <p className="empty">{missing ? "Yazdırılacak evrak yok. Önce AI sayfasından gerçek bir dosya yükleyin." : "Yükleniyor…"}</p>
+        <a className="as-btn" href="#/">
+          AI’ye dön
+        </a>
+      </section>
+    );
+  }
 
   return (
     <div className="print-wrap">
       <div className="print-bar no-print">
-        <p>
-          {fromUpload
-            ? "Bu fiş yüklenen evraktan üretildi. ETA SQL’ine bağlanılmaz."
-            : "Henüz evrak yok. Önce ana sayfadan yükleyin; yoksa örnek fiş yazdırılır."}
-        </p>
+        <p>Bu fiş yüklenen evraktan üretildi. ETA SQL’ine bağlanılmaz.</p>
         <div className="row" style={{ marginTop: 0 }}>
           <a className="as-btn ghost" href="#/">
-            Evrak yükle
+            AI
           </a>
           <button type="button" onClick={() => window.print()}>
             Fişi yazdır
           </button>
         </div>
       </div>
-
       <article className="fis" id="fis-kagit">
         <header className="fis-head">
           <div>
-            <p className="fis-co">{voucher.company}</p>
+            <p className="fis-co">{voucher.company || voucher.note}</p>
             <h1>Muhasebe fişi</h1>
           </div>
           <dl>
             <div>
               <dt>Fiş no</dt>
-              <dd>{voucher.number}</dd>
+              <dd>{voucher.number || "—"}</dd>
             </div>
             <div>
               <dt>Tarih</dt>
-              <dd>{voucher.date}</dd>
+              <dd>{voucher.date || "—"}</dd>
             </div>
             <div>
               <dt>Tür</dt>
@@ -83,8 +87,8 @@ export function PrintVoucher() {
           </tbody>
         </table>
         <footer className="fis-foot">
-          <span>Borç {voucher.debit}</span>
-          <span>Alacak {voucher.credit}</span>
+          <span>Borç {voucher.debit || "—"}</span>
+          <span>Alacak {voucher.credit || "—"}</span>
         </footer>
         <div className="fis-sign">
           <span>Düzenleyen</span>

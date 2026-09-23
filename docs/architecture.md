@@ -61,6 +61,25 @@ Windows ile onayladıysa, ajanın ittiği kısa ömürlü izinli görünüm çı
 
 ## 2. Bileşenler
 
+### 2.0 AI (nerede, nasıl bağlanır)
+
+AI müşteri makinesinde değildir. Tarayıcıda da model yoktur.
+
+```
+Kullanıcı (evrak yükler / yazar)
+        │  POST /api/evrak  ve  POST /api/ai
+        ▼
+denk-app  (bizim Cloudflare Worker)
+        │  env.AI.run("@cf/meta/llama-3.1-8b-instruct")
+        ▼
+Cloudflare Workers AI  (aynı hesap, binding; API anahtarı koda yazılmaz)
+```
+
+- Evrak **bizim** Worker’a gelir (kullanıcı yükler).
+- AI yalnız yüklenen evrakın çıkarılan alanlarını ve kullanıcının yazısını görür.
+- `env.AI` binding `apps/denk-app/wrangler.jsonc` içindedir. `denk-central` değildir.
+- Worker müşteri Windows’una veya ETA SQL’ine bağlanmaz.
+
 ### 2.1 Merkez
 
 | Bileşen | Görev | Önerilen teknoloji |
