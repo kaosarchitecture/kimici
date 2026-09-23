@@ -1,6 +1,6 @@
-# DENK çalışma alanı
+# DENK dijital personel
 
-Sıfırdan yazılmış Türkçe arayüz. DENKWEB değildir.
+K.A.O.S. ARC. ürünü. Sıfırdan yazılmış Türkçe arayüz. DENKWEB değildir.
 
 - `/#/` İzinli görünüm — evrak yüklenmez; ajanın ittiği satırlar
 - `/#/yazdir` İtilen satırlardan fiş yazdır

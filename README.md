@@ -1,4 +1,4 @@
-# DENK — ETA saha öğrenme platformu
+# DENK dijital personel — K.A.O.S. ARC.
 
 Muhasebe kurallarını operatörün verdiği örneklerden ve müşterinin ETA programındaki geçmiş
 davranışlarından öğrenen, bu kuralları **müşteri verisini merkeze taşımadan** müşterinin
