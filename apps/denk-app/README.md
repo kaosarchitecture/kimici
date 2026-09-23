@@ -13,22 +13,10 @@ Yerel adres: `http://127.0.0.1:8788`
 
 ## Canlı
 
-xAI API anahtarları `C:\DENK\secrets\xai.env` içinde. Cloudflare için token isteme; `denk@kaosarc.com` ile `wrangler login` yap, sonra deploy et.
+xAI anahtarı bağlanan Windows bilgisayarında `C:\DENK\secrets\xai.env` içindedir. Cloudflare'e konmaz. `denk@kaosarc.com` ile `wrangler login` yap, sonra deploy et.
 
 ```bash
 npx wrangler login
-```
-
-Secret dosyadan okunur, sohbete veya gite yazılmaz:
-
-```powershell
-$envLine = Get-Content 'C:\DENK\secrets\xai.env' | Where-Object { $_ -match '^XAI_API_KEY=' } | Select-Object -First 1
-$secret = $envLine -replace '^XAI_API_KEY=', ''
-$secret | npx wrangler secret put XAI_API_KEY
-Remove-Variable secret, envLine
-```
-
-```bash
 cd apps/admin-ui && npm run build
 cd ../denk-app && npx wrangler deploy
 ```
