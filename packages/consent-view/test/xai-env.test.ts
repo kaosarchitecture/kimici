@@ -6,14 +6,17 @@ describe("xai.env parser", () => {
     const parsed = parseXaiEnv(`
 # comment
 export XAI_API_KEY=xai-test
+XAI_API_KEY_1=xai-alt
 XAI_MODELS=grok-4.5,grok-4.6,grok-imagine-image
 grok-4.20-multi-agent-0309
 MODEL=grok-4.5
 `);
     expect(parsed.apiKey).toBe("xai-test");
+    expect(parsed.apiKeys).toEqual(["xai-test", "xai-alt"]);
     expect(parsed.preferred).toBe("grok-4.5");
-    expect(sortGrokNewest(parsed.models)[0]).toBe("grok-4.20-multi-agent-0309");
+    expect(sortGrokNewest(parsed.models)[0]).toBe("grok-4.6");
     expect(parsed.models).toContain("grok-4.6");
+    expect(parsed.models).not.toContain("grok-4.20-multi-agent-0309");
     expect(parsed.models).not.toContain("grok-imagine-image");
   });
 

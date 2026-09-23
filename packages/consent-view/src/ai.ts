@@ -2,7 +2,8 @@ import type { UploadedDocument } from "./ubl.ts";
 import { sortGrokNewest } from "./xai-env.ts";
 
 /** Fallback if xai.env / secret has no working id. */
-export const DEFAULT_XAI_MODEL = "grok-4.5";
+/** Live catalog for the DENK xai.env key (2026-09-23): only this chat model answered. */
+export const DEFAULT_XAI_MODEL = "grok-4.20-0309-reasoning";
 
 /** @deprecated use selected model from xai.env or XAI_MODEL env */
 export const XAI_MODEL = DEFAULT_XAI_MODEL;
@@ -49,11 +50,7 @@ export function buildChatMessages(userText: string, doc: UploadedDocument | null
 }
 
 export function xaiChatBody(messages: ChatMessage[], model = DEFAULT_XAI_MODEL): Record<string, unknown> {
-  return {
-    model,
-    messages,
-    reasoning_effort: "medium",
-  };
+  return { model, messages };
 }
 
 function textFromContent(content: unknown): string {

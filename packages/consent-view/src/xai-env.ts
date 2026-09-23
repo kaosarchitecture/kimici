@@ -1,10 +1,11 @@
 /** Windows DENK machine only. Never commit this file. */
 export const WINDOWS_XAI_ENV = "C:\\DENK\\secrets\\xai.env";
 
-const SKIP = /imagine|image|video|tts|voice|whisper|embed|vision|audio/i;
+const SKIP = /imagine|image|video|tts|voice|whisper|embed|vision|audio|multi-agent/i;
 
 export interface XaiEnvFile {
   apiKey: string;
+  apiKeys: string[];
   models: string[];
   preferred: string;
 }
@@ -39,6 +40,7 @@ function collectGrokTokens(raw: string): string[] {
 
 export function parseXaiEnv(text: string): XaiEnvFile {
   const models: string[] = [];
+  const apiKeys: string[] = [];
   let apiKey = "";
   let preferred = "";
 
@@ -58,8 +60,9 @@ export function parseXaiEnv(text: string): XaiEnvFile {
       value = value.slice(1, -1);
     }
 
-    if (/^(XAI_API_KEY|XAI_KEY|GROK_API_KEY)$/i.test(key)) {
-      apiKey = value;
+    if (/^(XAI_API_KEY_\d+|XAI_API_KEY|XAI_KEY|GROK_API_KEY)$/i.test(key)) {
+      if (value) apiKeys.push(value);
+      if (/^(XAI_API_KEY|XAI_KEY|GROK_API_KEY)$/i.test(key) && value) apiKey = value;
       continue;
     }
     if (/^(XAI_MODEL|GROK_MODEL|MODEL)$/i.test(key)) {
@@ -72,7 +75,13 @@ export function parseXaiEnv(text: string): XaiEnvFile {
     }
   }
 
-  return { apiKey, models: sortGrokNewest(models), preferred: preferred && isChatGrok(preferred) ? preferred : "" };
+  const uniqueKeys = [...new Set(apiKeys.filter(Boolean))];
+  return {
+    apiKey: apiKey || uniqueKeys[0] || "",
+    apiKeys: uniqueKeys,
+    models: sortGrokNewest(models),
+    preferred: preferred && isChatGrok(preferred) ? preferred : "",
+  };
 }
 
 export function defaultXaiEnvPath(platform = process.platform, override = process.env.XAI_ENV_FILE): string {

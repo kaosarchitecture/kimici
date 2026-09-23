@@ -12,7 +12,7 @@ import { documentFromFile } from "../src/ubl.ts";
 
 describe("Grok prompt", () => {
   it("keeps the model off SQL", () => {
-    expect(DEFAULT_XAI_MODEL).toBe("grok-4.5");
+    expect(DEFAULT_XAI_MODEL).toBe("grok-4.20-0309-reasoning");
     expect(cfGrokId("grok-4.6")).toBe("xai/grok-4.6");
     expect(SYSTEM_PROMPT).toContain("Grok");
     expect(SYSTEM_PROMPT).toContain("SQL yazma");

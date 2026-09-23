@@ -12,7 +12,7 @@ kendi bilgisayarında uygulayan SaaS.
 - İzinli görünüm protokolü: `packages/consent-view`.
 - Yeni web arayüzü: `apps/admin-ui` — DENKWEB’den bağımsız, sıfırdan.
 - Cloudflare Worker: `apps/denk-app` (denk-central / denkmuhasebe.com değil).
-- AI: Grok 4.5 (`grok-4.5` / `xai/grok-4.5`) `denk-app` Worker içinde.
+- AI: Grok (`grok-4.20-0309-reasoning`, xai.env canlı katalog) `denk-app` Worker içinde.
   Tarayıcı modele gitmez; müşteri makinesine de gitmez.
 
 ```bash

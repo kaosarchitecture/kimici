@@ -32,32 +32,37 @@ const session = {
 
 async function bootXai(): Promise<void> {
   const path = defaultXaiEnvPath();
-  let key = process.env.XAI_API_KEY ?? "";
+  const keys: string[] = [];
   let fromFile: string[] = [];
+  if (process.env.XAI_API_KEY) keys.push(process.env.XAI_API_KEY);
   if (path) {
     try {
       const parsed = parseXaiEnv(await readFile(path, "utf8"));
-      if (parsed.apiKey) key = parsed.apiKey;
+      keys.push(...parsed.apiKeys);
       fromFile = parsed.preferred ? [parsed.preferred, ...parsed.models] : parsed.models;
       session.source = path;
     } catch {
       session.source = "";
     }
   }
-  if (!key) return;
-  const apiList = await listXaiModels(key).catch(() => []);
-  const candidates = fromFile.length > 0 ? fromFile : apiList;
-  try {
-    session.model = await selectWorkingXaiModel(key, candidates);
-  } catch {
-    if (fromFile.length && apiList.length) {
-      session.model = await selectWorkingXaiModel(key, apiList);
-    } else {
-      return;
+  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+  for (const key of uniqueKeys) {
+    const apiList = await listXaiModels(key);
+    const candidates = fromFile.length > 0 ? fromFile : apiList;
+    if (candidates.length === 0) continue;
+    try {
+      session.model = await selectWorkingXaiModel(key, candidates);
+    } catch {
+      if (fromFile.length && apiList.length) {
+        session.model = await selectWorkingXaiModel(key, apiList);
+      } else {
+        continue;
+      }
     }
+    session.key = key;
+    session.via = "xai-rest";
+    return;
   }
-  session.key = key;
-  session.via = "xai-rest";
 }
 
 const MIME: Record<string, string> = {

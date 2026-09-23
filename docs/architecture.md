@@ -71,7 +71,7 @@ Kullanıcı (evrak yükler / yazar)
         ▼
 denk-app  (bizim Cloudflare Worker)
         │  Grok 4.5
-        │  XAI_API_KEY → api.x.ai  veya  env.AI.run("xai/grok-4.5")
+        │  XAI_API_KEY → api.x.ai  model=grok-4.20-0309-reasoning
         ▼
 xAI Grok 4.5  (anahtar secret; koda yazılmaz)
 ```

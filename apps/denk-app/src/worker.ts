@@ -1,11 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import {
-  buildChatMessages,
-  cfGrokId,
-  DEFAULT_XAI_MODEL,
-  extractModelText,
-  runXaiChat,
-} from "../../../packages/consent-view/src/ai.ts";
+import { buildChatMessages, DEFAULT_XAI_MODEL, runXaiChat } from "../../../packages/consent-view/src/ai.ts";
 import { documentFromFile, type UploadedDocument } from "../../../packages/consent-view/src/ubl.ts";
 
 export interface Env {
@@ -54,18 +48,10 @@ function modelOf(env: Env): string {
 
 async function runGrok(env: Env, messages: ReturnType<typeof buildChatMessages>): Promise<{ reply: string; via: string }> {
   const model = modelOf(env);
-  if (env.XAI_API_KEY) {
-    return { reply: await runXaiChat(env.XAI_API_KEY, messages, model), via: "xai-rest" };
+  if (!env.XAI_API_KEY) {
+    throw new Error("Grok bağlı değil. wrangler secret put XAI_API_KEY — anahtar koda yazılmaz.");
   }
-  const run = env.AI.run.bind(env.AI) as (
-    model: string,
-    input: { messages: typeof messages },
-    opts?: { gateway: { id: string } },
-  ) => Promise<unknown>;
-  const raw = await run(cfGrokId(model), { messages }, { gateway: { id: "default" } });
-  const reply = extractModelText(raw);
-  if (!reply) throw new Error(`${model} boş cevap verdi.`);
-  return { reply, via: "ai-gateway" };
+  return { reply: await runXaiChat(env.XAI_API_KEY, messages, model), via: "xai-rest" };
 }
 
 export default {
@@ -75,9 +61,9 @@ export default {
     if (url.pathname === "/api/ai") {
       if (request.method === "GET") {
         return json({
-          connected: true,
+          connected: Boolean(env.XAI_API_KEY),
           model: modelOf(env),
-          via: env.XAI_API_KEY ? "xai-rest" : "ai-gateway",
+          via: env.XAI_API_KEY ? "xai-rest" : "disconnected",
           where: "denk-app Worker · Grok · müşteri makinesine gitmez",
         });
       }
