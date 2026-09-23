@@ -10,7 +10,7 @@ const DATABASE_QUERY = "SELECT name FROM sys.databases WHERE database_id > 4 ORD
 const COMPANY_QUERY = "SELECT SIRKOD, SIRDBNAME, SIRPATH FROM SIRKET";
 const TEMPLATE_QUERY = "SELECT TOP 1 MUHFISREFNO AS refNo FROM MUHFIS";
 const VOUCHER_QUERY =
-  "SELECT TOP 5 MUHFISNO AS voucherNo, MUHFISTAR AS voucherDate, MUHFISBORCTOP AS debit, MUHFISALACAKTOP AS credit FROM MUHFIS ORDER BY MUHFISREFNO DESC";
+  "SELECT TOP 5 MUHFISREFNO AS refNo, MUHFISNO AS voucherNo, MUHFISTAR AS voucherDate, MUHFISSEVNO AS versionNo, MUHFISBELTUR AS kind, MUHFISBORCTOP AS debit, MUHFISALACAKTOP AS credit FROM MUHFIS ORDER BY MUHFISREFNO DESC";
 const COMPANY_DB = /^ETA_[A-Z0-9]+_\d{4}$/;
 const COMPANY_CODE = /^[\p{L}\p{N}_.-]{1,40}$/u;
 
@@ -20,12 +20,24 @@ export interface EtaAccess {
   build: "open" | "closed";
 }
 
+export interface ReadLine {
+  seq: number;
+  account: string;
+  side: "B" | "A" | "";
+  amount: string;
+  description: string;
+  date: string;
+}
+
 export interface ReadVoucher {
   company: string;
   voucherNo: string;
   date: string;
   debit: string;
   credit: string;
+  version: string;
+  kind: string;
+  lines: ReadLine[];
 }
 
 export interface LocalRead {
@@ -98,17 +110,41 @@ export async function readMachine(
         const template = await port.query(server, database, TEMPLATE_QUERY);
         if (template.length > 0) seen.readyDatabases.push(database);
         const vouchers = await port.query(server, database, VOUCHER_QUERY);
+        const drafts: { refNo: number; voucher: ReadVoucher }[] = [];
         for (const voucher of vouchers) {
           const voucherNo = text(voucher, "voucherNo");
           if (!voucherNo) continue;
-          seen.vouchers.push({
-            company: code,
-            voucherNo,
-            date: text(voucher, "voucherDate").slice(0, 10),
-            debit: money(voucher.debit),
-            credit: money(voucher.credit),
+          drafts.push({
+            refNo: finite(voucher.refNo),
+            voucher: {
+              company: code,
+              voucherNo,
+              date: text(voucher, "voucherDate").slice(0, 10),
+              debit: money(voucher.debit),
+              credit: money(voucher.credit),
+              version: text(voucher, "versionNo"),
+              kind: text(voucher, "kind"),
+              lines: [],
+            },
           });
         }
+        const refs = drafts.map((item) => item.refNo).filter((ref) => ref > 0);
+        if (refs.length > 0) {
+          const lines = await port.query(server, database, lineQuery(refs));
+          for (const line of lines) {
+            const target = drafts.find((item) => item.refNo === finite(line.refNo));
+            if (!target || target.voucher.lines.length >= 40) continue;
+            target.voucher.lines.push({
+              seq: finite(line.seq),
+              account: text(line, "account"),
+              side: sideOf(line.side),
+              amount: money(line.amount),
+              description: text(line, "description"),
+              date: text(line, "lineDate").slice(0, 10),
+            });
+          }
+        }
+        seen.vouchers.push(...drafts.map((item) => item.voucher));
       } catch {
         // This company database did not answer. The others still count.
       }
@@ -139,6 +175,18 @@ export function etaNote(access: EtaSession): string {
   if (access.companies.length === 0) return `Windows oturumuyla okundu. Veritabanı: ${databases}. ETA yok.`;
   const build = access.build === "open" ? "Build açık." : "Build kapalı.";
   return `Windows oturumuyla okundu. Veritabanı: ${databases}. Şirket: ${access.companies.join(", ")}. Fiş: ${access.vouchers.length}. ${build}`;
+}
+
+function lineQuery(refs: number[]): string {
+  const list = refs.filter((ref) => Number.isInteger(ref) && ref > 0).join(",");
+  return `SELECT MUHHARREFNO AS refNo, MUHHARSIRANO AS seq, MUHHARMUHKOD AS account, MUHHARBATIPI AS side, MUHHARTUTAR AS amount, MUHHARACIKLAMA AS description, MUHHARTAR AS lineDate FROM MUHHAR WHERE MUHHARREFNO IN (${list}) ORDER BY MUHHARREFNO, MUHHARSIRANO`;
+}
+
+function sideOf(value: unknown): "B" | "A" | "" {
+  const number = typeof value === "number" ? value : Number(value);
+  if (number === 1 || value === "B") return "B";
+  if (number === 2 || value === "A") return "A";
+  return "";
 }
 
 function money(value: unknown): string {

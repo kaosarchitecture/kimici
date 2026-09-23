@@ -66,7 +66,7 @@ export function Desk() {
         <a className="as-btn" href="/denk-baglan/Baglan.cmd" download="Baglan.cmd">
           Bu bilgisayarı bağla
         </a>
-        <p className="lede">İndirilen dosyayı çalıştır. Windows onayı bu bilgisayarda sorulur.</p>
+        <p className="lede">Bir kez çalıştır. Windows onayı o bilgisayarda sorulur. Okunan fişler burada açılır.</p>
         {desk && desk.machines.length === 0 ? <p className="empty">Bağlı bilgisayar yok.</p> : null}
         <div className="machines">
           {desk?.machines.map((row) => (
@@ -89,14 +89,14 @@ export function Desk() {
       {machine ? (
         <section className="sheet">
           <h2>{machine.machineId}</h2>
-          <MachineResult machine={machine} busy={busy} onRun={() => void run(machine)} />
+          <MachineResult machine={machine} rulesVersion={desk?.rulesVersion ?? ""} busy={busy} onRun={() => void run(machine)} />
         </section>
       ) : null}
     </div>
   );
 }
 
-function MachineResult(props: { machine: MachineView; busy: boolean; onRun: () => void }) {
+function MachineResult(props: { machine: MachineView; rulesVersion: string; busy: boolean; onRun: () => void }) {
   const job = props.machine.lastJob;
   return (
     <>
@@ -107,14 +107,46 @@ function MachineResult(props: { machine: MachineView; busy: boolean; onRun: () =
           <p className="lede">{job.read.companies.length > 0 ? `ETA: ${job.read.companies.join(", ")}` : "ETA yok."}</p>
           <p className="lede">{job.eta?.build === "open" ? "Build açık." : "Build kapalı."}</p>
           {job.read.vouchers.map((voucher) => (
-            <p key={`${voucher.company}-${voucher.voucherNo}`} className="lede">
-              {voucher.company} · {voucher.voucherNo} · {voucher.date} · {voucher.debit} / {voucher.credit}
-            </p>
+            <article key={`${voucher.company}-${voucher.voucherNo}`} className="voucher">
+              <h3>
+                {voucher.voucherNo} · {voucher.company}
+                {voucher.kind ? ` · ${voucher.kind}` : ""}
+              </h3>
+              <p className="lede">
+                Fiş sürümü {voucher.version || "—"} · Kural sürümü {props.rulesVersion || "—"} · {voucher.date} · borç {voucher.debit} · alacak {voucher.credit}
+              </p>
+              {voucher.lines.length > 0 ? (
+                <table className="ledger">
+                  <thead>
+                    <tr>
+                      <th>Sıra</th>
+                      <th>Hesap</th>
+                      <th>B/A</th>
+                      <th>Tutar</th>
+                      <th>Açıklama</th>
+                      <th>Tarih</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {voucher.lines.map((line) => (
+                      <tr key={`${voucher.voucherNo}-${line.seq}-${line.account}`}>
+                        <td>{line.seq}</td>
+                        <td>{line.account}</td>
+                        <td>{line.side}</td>
+                        <td className="num">{line.amount}</td>
+                        <td>{line.description}</td>
+                        <td>{line.date}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+            </article>
           ))}
           {job.read.files.length > 0 ? <p className="lede">{job.read.files.join(", ")}</p> : null}
         </>
       ) : null}
-      <p className="lede">{job?.note ?? "Windows onayı gelince bu bilgisayardaki SQL ve ETA açılır."}</p>
+      <p className="lede">{job?.note ?? "Windows onayı gelince bu bilgisayardan okunan fişler burada açılır."}</p>
       <div className="row">
         <button type="button" disabled={props.busy || !props.machine.online || !job?.windowsAccount} onClick={props.onRun}>
           {props.busy || job?.status === "running" ? "Bu bilgisayarda açılıyor…" : "Bu bilgisayarda aç"}

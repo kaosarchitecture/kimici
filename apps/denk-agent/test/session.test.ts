@@ -9,6 +9,32 @@ const pack = buildKnowledgePack();
 function port(rows: Record<string, Record<string, unknown>[]>): SqlPort {
   return {
     async query(_server, database, statement) {
+      if (statement.includes("MUHHARSIRANO")) {
+        return [
+          {
+            refNo: 10,
+            seq: 1,
+            account: "770 01",
+            side: 1,
+            amount: 100,
+            description: "gider",
+            lineDate: "2026-01-02",
+          },
+        ];
+      }
+      if (statement.includes("MUHFISSEVNO")) {
+        return [
+          {
+            refNo: 10,
+            voucherNo: "MA-000010",
+            voucherDate: "2026-01-02",
+            versionNo: 3,
+            kind: "FAT",
+            debit: 120,
+            credit: 120,
+          },
+        ];
+      }
       if (statement.includes("AS refNo")) {
         if (statement.includes("MUHFISIPTAL")) return [{ refNo: 4 }];
         return [{ refNo: 10 }];
@@ -80,6 +106,9 @@ describe("hub messages", () => {
     expect(done.outbound?.eta).toEqual({ sql: true, companies: ["S29"], build: "open" });
     expect(done.outbound?.read?.databases).toEqual(["ETA_MASTERV8"]);
     expect(done.outbound?.read?.vouchers[0]?.voucherNo).toBe("MA-000010");
+    expect(done.outbound?.read?.vouchers[0]?.version).toBe("3");
+    expect(done.outbound?.read?.vouchers[0]?.lines[0]?.account).toBe("770 01");
+    expect(done.outbound?.read?.vouchers[0]?.lines[0]?.side).toBe("B");
     expect(done.outbound?.read?.files).toEqual(["muhfis.dat"]);
     expect(JSON.stringify(done.outbound)).not.toMatch(/Deneme|DENEME/);
     expect(done.outbound?.vouchers).toEqual([]);

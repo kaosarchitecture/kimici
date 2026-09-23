@@ -60,12 +60,24 @@ export interface EtaAccess {
   build: "open" | "closed";
 }
 
+export interface ReadLine {
+  seq: number;
+  account: string;
+  side: "B" | "A" | "";
+  amount: string;
+  description: string;
+  date: string;
+}
+
 export interface ReadVoucher {
   company: string;
   voucherNo: string;
   date: string;
   debit: string;
   credit: string;
+  version: string;
+  kind: string;
+  lines: ReadLine[];
 }
 
 export interface LocalRead {
@@ -161,6 +173,16 @@ function cleanRead(input: LocalRead | undefined): LocalRead | undefined {
     date: cleanText(row.date, 40),
     debit: cleanText(row.debit, 40),
     credit: cleanText(row.credit, 40),
+    version: cleanText(row.version, 20),
+    kind: cleanText(row.kind, 20),
+    lines: (row.lines ?? []).slice(0, 40).map((line) => ({
+      seq: Number.isFinite(line.seq) ? line.seq : 0,
+      account: cleanText(line.account, 40),
+      side: line.side === "A" || line.side === "B" ? line.side : "",
+      amount: cleanText(line.amount, 40),
+      description: cleanText(line.description, 200),
+      date: cleanText(line.date, 40),
+    })),
   }));
   return { databases, companies, files, vouchers };
 }

@@ -4170,7 +4170,7 @@ var LOCAL_SQL_SERVERS = ["localhost", ".", "localhost\\SQLEXPRESS", ".\\SQLEXPRE
 var DATABASE_QUERY = "SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name";
 var COMPANY_QUERY = "SELECT SIRKOD, SIRDBNAME, SIRPATH FROM SIRKET";
 var TEMPLATE_QUERY = "SELECT TOP 1 MUHFISREFNO AS refNo FROM MUHFIS";
-var VOUCHER_QUERY = "SELECT TOP 5 MUHFISNO AS voucherNo, MUHFISTAR AS voucherDate, MUHFISBORCTOP AS debit, MUHFISALACAKTOP AS credit FROM MUHFIS ORDER BY MUHFISREFNO DESC";
+var VOUCHER_QUERY = "SELECT TOP 5 MUHFISREFNO AS refNo, MUHFISNO AS voucherNo, MUHFISTAR AS voucherDate, MUHFISSEVNO AS versionNo, MUHFISBELTUR AS kind, MUHFISBORCTOP AS debit, MUHFISALACAKTOP AS credit FROM MUHFIS ORDER BY MUHFISREFNO DESC";
 var COMPANY_DB = /^ETA_[A-Z0-9]+_\d{4}$/;
 var COMPANY_CODE = /^[\p{L}\p{N}_.-]{1,40}$/u;
 function localConnectionString(server, database) {
@@ -4221,17 +4221,41 @@ async function readMachine(port, listDir = async () => [], servers = LOCAL_SQL_S
         const template = await port.query(server, database, TEMPLATE_QUERY);
         if (template.length > 0) seen.readyDatabases.push(database);
         const vouchers = await port.query(server, database, VOUCHER_QUERY);
+        const drafts = [];
         for (const voucher of vouchers) {
           const voucherNo = text(voucher, "voucherNo");
           if (!voucherNo) continue;
-          seen.vouchers.push({
-            company: code,
-            voucherNo,
-            date: text(voucher, "voucherDate").slice(0, 10),
-            debit: money(voucher.debit),
-            credit: money(voucher.credit)
+          drafts.push({
+            refNo: finite(voucher.refNo),
+            voucher: {
+              company: code,
+              voucherNo,
+              date: text(voucher, "voucherDate").slice(0, 10),
+              debit: money(voucher.debit),
+              credit: money(voucher.credit),
+              version: text(voucher, "versionNo"),
+              kind: text(voucher, "kind"),
+              lines: []
+            }
           });
         }
+        const refs = drafts.map((item) => item.refNo).filter((ref) => ref > 0);
+        if (refs.length > 0) {
+          const lines = await port.query(server, database, lineQuery(refs));
+          for (const line of lines) {
+            const target = drafts.find((item) => item.refNo === finite(line.refNo));
+            if (!target || target.voucher.lines.length >= 40) continue;
+            target.voucher.lines.push({
+              seq: finite(line.seq),
+              account: text(line, "account"),
+              side: sideOf(line.side),
+              amount: money(line.amount),
+              description: text(line, "description"),
+              date: text(line, "lineDate").slice(0, 10)
+            });
+          }
+        }
+        seen.vouchers.push(...drafts.map((item) => item.voucher));
       } catch {
       }
       const dir = text(row, "SIRPATH");
@@ -4257,6 +4281,16 @@ function etaNote(access) {
   if (access.companies.length === 0) return `Windows oturumuyla okundu. Veritaban\u0131: ${databases}. ETA yok.`;
   const build = access.build === "open" ? "Build a\xE7\u0131k." : "Build kapal\u0131.";
   return `Windows oturumuyla okundu. Veritaban\u0131: ${databases}. \u015Eirket: ${access.companies.join(", ")}. Fi\u015F: ${access.vouchers.length}. ${build}`;
+}
+function lineQuery(refs) {
+  const list = refs.filter((ref) => Number.isInteger(ref) && ref > 0).join(",");
+  return `SELECT MUHHARREFNO AS refNo, MUHHARSIRANO AS seq, MUHHARMUHKOD AS account, MUHHARBATIPI AS side, MUHHARTUTAR AS amount, MUHHARACIKLAMA AS description, MUHHARTAR AS lineDate FROM MUHHAR WHERE MUHHARREFNO IN (${list}) ORDER BY MUHHARREFNO, MUHHARSIRANO`;
+}
+function sideOf(value) {
+  const number = typeof value === "number" ? value : Number(value);
+  if (number === 1 || value === "B") return "B";
+  if (number === 2 || value === "A") return "A";
+  return "";
 }
 function money(value) {
   if (typeof value === "number" && Number.isFinite(value)) return formatTr(tlToKurus(value));

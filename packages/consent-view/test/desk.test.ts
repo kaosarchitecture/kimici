@@ -57,7 +57,16 @@ describe("connected computers", () => {
         databases: ["ETA_MASTERV8"],
         companies: ["A"],
         files: [],
-        vouchers: [{ company: "A", voucherNo: "MA-000001", date: "2026-01-02", debit: "120,00", credit: "120,00" }],
+        vouchers: [{
+          company: "A",
+          voucherNo: "MA-000001",
+          date: "2026-01-02",
+          debit: "120,00",
+          credit: "120,00",
+          version: "3",
+          kind: "FAT",
+          lines: [{ seq: 1, account: "770 01", side: "B", amount: "100,00", description: "gider", date: "2026-01-02" }],
+        }],
       },
     }, NOW);
 

@@ -38,7 +38,16 @@ export interface JobRecord {
 export interface LocalRead {
   databases: string[];
   companies: string[];
-  vouchers: { company: string; voucherNo: string; date: string; debit: string; credit: string }[];
+  vouchers: {
+    company: string;
+    voucherNo: string;
+    date: string;
+    debit: string;
+    credit: string;
+    version: string;
+    kind: string;
+    lines: { seq: number; account: string; side: "B" | "A" | ""; amount: string; description: string; date: string }[];
+  }[];
   files: string[];
 }
 
