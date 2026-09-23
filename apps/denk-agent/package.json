@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "connect": "node --experimental-strip-types src/cli.ts connect",
-    "process": "node --experimental-strip-types src/cli.ts"
+    "process": "node --experimental-strip-types src/cli.ts",
+    "bundle": "../admin-ui/node_modules/esbuild/bin/esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=../admin-ui/public/denk-baglan/agent.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

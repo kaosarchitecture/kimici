@@ -192,6 +192,7 @@ button.warn {
 }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 .row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; }
+.sheet > a.as-btn { margin-bottom: 0.75rem; }
 a.as-btn {
   display: inline-block;
   text-decoration: none;

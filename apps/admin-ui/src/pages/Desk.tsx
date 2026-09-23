@@ -63,6 +63,10 @@ export function Desk() {
   return (
     <div className={machine ? "desk" : "desk solo"}>
       <section className="sheet">
+        <a className="as-btn" href="/denk-baglan/Baglan.cmd" download="Baglan.cmd">
+          Bu bilgisayarı bağla
+        </a>
+        <p className="lede">İndirilen dosyayı çalıştır. Kayıtlar C:\DENK\inbox içine konur. Fiş burada görünür.</p>
         {desk && desk.machines.length === 0 ? <p className="empty">Bağlı bilgisayar yok.</p> : null}
         <div className="machines">
           {desk?.machines.map((row) => (
