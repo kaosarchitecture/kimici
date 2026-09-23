@@ -1,10 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   buildChatMessages,
-  CF_GROK_MODEL,
+  cfGrokId,
+  DEFAULT_XAI_MODEL,
   extractModelText,
   runXaiChat,
-  XAI_MODEL,
 } from "../../../packages/consent-view/src/ai.ts";
 import { documentFromFile, type UploadedDocument } from "../../../packages/consent-view/src/ubl.ts";
 
@@ -13,6 +13,7 @@ export interface Env {
   EVRAK: DurableObjectNamespace<EvrakStore>;
   AI: Ai;
   XAI_API_KEY?: string;
+  XAI_MODEL?: string;
 }
 
 const MAX = 5 * 1024 * 1024;
@@ -47,18 +48,23 @@ async function storedOrBody(
   return store.getDoc();
 }
 
+function modelOf(env: Env): string {
+  return env.XAI_MODEL || DEFAULT_XAI_MODEL;
+}
+
 async function runGrok(env: Env, messages: ReturnType<typeof buildChatMessages>): Promise<{ reply: string; via: string }> {
+  const model = modelOf(env);
   if (env.XAI_API_KEY) {
-    return { reply: await runXaiChat(env.XAI_API_KEY, messages), via: "xai-rest" };
+    return { reply: await runXaiChat(env.XAI_API_KEY, messages, model), via: "xai-rest" };
   }
   const run = env.AI.run.bind(env.AI) as (
     model: string,
     input: { messages: typeof messages },
     opts?: { gateway: { id: string } },
   ) => Promise<unknown>;
-  const raw = await run(CF_GROK_MODEL, { messages }, { gateway: { id: "default" } });
+  const raw = await run(cfGrokId(model), { messages }, { gateway: { id: "default" } });
   const reply = extractModelText(raw);
-  if (!reply) throw new Error("Grok 4.5 boş cevap verdi.");
+  if (!reply) throw new Error(`${model} boş cevap verdi.`);
   return { reply, via: "ai-gateway" };
 }
 
@@ -70,9 +76,9 @@ export default {
       if (request.method === "GET") {
         return json({
           connected: true,
-          model: XAI_MODEL,
+          model: modelOf(env),
           via: env.XAI_API_KEY ? "xai-rest" : "ai-gateway",
-          where: "denk-app Worker · Grok 4.5 · müşteri makinesine gitmez",
+          where: "denk-app Worker · Grok · müşteri makinesine gitmez",
         });
       }
       if (request.method !== "POST") return json({ error: "izin yok" }, 405);
@@ -81,10 +87,10 @@ export default {
       const doc = await storedOrBody(store, body.document);
       try {
         const { reply, via } = await runGrok(env, buildChatMessages(body.message ?? "", doc));
-        return json({ reply, model: XAI_MODEL, via });
+        return json({ reply, model: modelOf(env), via });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Grok cevap vermedi.";
-        return json({ error: message, model: XAI_MODEL }, 502);
+        return json({ error: message, model: modelOf(env) }, 502);
       }
     }
 

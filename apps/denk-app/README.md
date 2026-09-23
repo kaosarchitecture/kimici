@@ -4,15 +4,13 @@ Evrak yükleme + Grok 4.5 + fiş yazdır. **denk-central** ve **denkmuhasebe.com
 
 ## Model
 
-**Grok 4.5** (`grok-4.5` / Cloudflare id `xai/grok-4.5`). Llama bağlı değil.
+Windows DENK sunucusunda `C:\DENK\secrets\xai.env` okunur. Listedeki en yeni **çalışan** Grok seçilir (`/v1/models` + kısa probe). Anahtar koda ve git’e yazılmaz.
 
 ```
 Tarayıcı → POST /api/ai → denk-app
-  1) XAI_API_KEY varsa → https://api.x.ai/v1/chat/completions  model=grok-4.5
-  2) yoksa → env.AI.run("xai/grok-4.5", …, { gateway: { id: "default" } })
+  1) xai.env / XAI_API_KEY → https://api.x.ai/v1/chat/completions
+  2) yoksa → env.AI.run("xai/<seçilen-model>")
 ```
-
-Anahtar koda yazılmaz: `npx wrangler secret put XAI_API_KEY`. Müşteri makinesine gidilmez.
 
 ```bash
 cd ../admin-ui && npm run build

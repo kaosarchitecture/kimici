@@ -4,12 +4,15 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildChatMessages,
-  CF_GROK_MODEL,
+  cfGrokId,
+  DEFAULT_XAI_MODEL,
   extractModelText,
+  listXaiModels,
   runXaiChat,
-  XAI_MODEL,
+  selectWorkingXaiModel,
   type ChatMessage,
 } from "../src/ai.ts";
+import { defaultXaiEnvPath, parseXaiEnv } from "../src/xai-env.ts";
 import { documentFromFile, type UploadedDocument } from "../src/ubl.ts";
 
 const MAX_EVRAK = 5 * 1024 * 1024;
@@ -17,9 +20,45 @@ let lastEvrak: UploadedDocument | null = null;
 
 const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
 const PORT = Number(process.env.PORT ?? 8788);
-const XAI_KEY = process.env.XAI_API_KEY ?? "";
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? "";
+
+const session = {
+  key: "",
+  model: DEFAULT_XAI_MODEL,
+  via: "disconnected",
+  source: "",
+};
+
+async function bootXai(): Promise<void> {
+  const path = defaultXaiEnvPath();
+  let key = process.env.XAI_API_KEY ?? "";
+  let fromFile: string[] = [];
+  if (path) {
+    try {
+      const parsed = parseXaiEnv(await readFile(path, "utf8"));
+      if (parsed.apiKey) key = parsed.apiKey;
+      fromFile = parsed.preferred ? [parsed.preferred, ...parsed.models] : parsed.models;
+      session.source = path;
+    } catch {
+      session.source = "";
+    }
+  }
+  if (!key) return;
+  const apiList = await listXaiModels(key).catch(() => []);
+  const candidates = fromFile.length > 0 ? fromFile : apiList;
+  try {
+    session.model = await selectWorkingXaiModel(key, candidates);
+  } catch {
+    if (fromFile.length && apiList.length) {
+      session.model = await selectWorkingXaiModel(key, apiList);
+    } else {
+      return;
+    }
+  }
+  session.key = key;
+  session.via = "xai-rest";
+}
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -49,7 +88,9 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 }
 
 async function runGrok(messages: ChatMessage[]): Promise<{ reply: string; via: string }> {
-  if (XAI_KEY) return { reply: await runXaiChat(XAI_KEY, messages), via: "xai-rest" };
+  if (session.key) {
+    return { reply: await runXaiChat(session.key, messages, session.model), via: session.via };
+  }
   if (ACCOUNT && TOKEN) {
     const res = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/v1/chat/completions`,
@@ -59,7 +100,7 @@ async function runGrok(messages: ChatMessage[]): Promise<{ reply: string; via: s
           authorization: `Bearer ${TOKEN}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ model: CF_GROK_MODEL, messages }),
+        body: JSON.stringify({ model: cfGrokId(session.model), messages }),
       },
     );
     const payload = (await res.json()) as { result?: unknown; errors?: Array<{ message?: string }> };
@@ -67,11 +108,11 @@ async function runGrok(messages: ChatMessage[]): Promise<{ reply: string; via: s
       throw new Error(payload.errors?.[0]?.message ?? `Cloudflare AI HTTP ${res.status}`);
     }
     const reply = extractModelText(payload.result ?? payload);
-    if (!reply) throw new Error("Grok 4.5 boş cevap verdi.");
+    if (!reply) throw new Error(`${session.model} boş cevap verdi.`);
     return { reply, via: "ai-gateway" };
   }
   throw new Error(
-    "Grok 4.5 bağlı değil. denk-app’i wrangler deploy edin (env.AI → xai/grok-4.5) veya XAI_API_KEY ortam değişkeni koyun; anahtar koda yazılmaz.",
+    "Grok bağlı değil. Windows’ta C:\\DENK\\secrets\\xai.env okunur; bu Linux ortamında XAI_ENV_FILE veya wrangler secret gerekir. Anahtar koda yazılmaz.",
   );
 }
 
@@ -88,12 +129,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (method === "GET" && url.pathname === "/api/ai") {
-      const connected = Boolean(XAI_KEY || (ACCOUNT && TOKEN));
+      const connected = Boolean(session.key || (ACCOUNT && TOKEN));
       return json(res, 200, {
         connected,
-        model: XAI_MODEL,
-        via: XAI_KEY ? "xai-rest" : ACCOUNT && TOKEN ? "ai-gateway" : "disconnected",
-        where: "denk-app Worker · Grok 4.5 · müşteri makinesine gitmez",
+        model: session.model,
+        via: session.key ? session.via : ACCOUNT && TOKEN ? "ai-gateway" : "disconnected",
+        where: "Grok · xai.env veya Worker secret · müşteri makinesine gitmez",
+        source: session.source || undefined,
       });
     }
 
@@ -101,7 +143,7 @@ const server = createServer(async (req, res) => {
       const body = (await readBody(req)) as { message?: string; document?: UploadedDocument | null };
       const doc = body.document?.fileName ? body.document : lastEvrak;
       const { reply, via } = await runGrok(buildChatMessages(body.message ?? "", doc));
-      return json(res, 200, { reply, model: XAI_MODEL, via });
+      return json(res, 200, { reply, model: session.model, via });
     }
 
     if (method === "GET" && url.pathname === "/api/evrak") {
@@ -148,11 +190,12 @@ const server = createServer(async (req, res) => {
   }
 });
 
+await bootXai();
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`DENK: http://0.0.0.0:${PORT}`);
   console.log(
-    XAI_KEY || (ACCOUNT && TOKEN)
-      ? `AI: Grok 4.5 (${XAI_KEY ? "xai-rest" : "ai-gateway"})`
-      : "Grok 4.5 bağlı değil — wrangler deploy veya XAI_API_KEY",
+    session.key || (ACCOUNT && TOKEN)
+      ? `AI: ${session.model} (${session.via}${session.source ? ` · ${session.source}` : ""})`
+      : "Grok bağlı değil — C:\\DENK\\secrets\\xai.env veya XAI_ENV_FILE",
   );
 });

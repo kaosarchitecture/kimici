@@ -1,14 +1,19 @@
 export {
   buildChatMessages,
-  CF_GROK_MODEL,
+  cfGrokId,
+  DEFAULT_XAI_MODEL,
   documentContext,
   extractModelText,
+  listXaiModels,
+  probeXaiModel,
   runXaiChat,
+  selectWorkingXaiModel,
   SYSTEM_PROMPT,
   XAI_CHAT_URL,
   XAI_MODEL,
   xaiChatBody,
 } from "./ai.ts";
+export { defaultXaiEnvPath, parseXaiEnv, sortGrokNewest, WINDOWS_XAI_ENV } from "./xai-env.ts";
 export { ConsentHub } from "./hub.ts";
 export { filterRecords, isViewField, sanitizeFields } from "./filter.ts";
 export { attestWindowsIdentity, demoWindowsIdentity } from "./windows.ts";

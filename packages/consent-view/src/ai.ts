@@ -1,17 +1,22 @@
 import type { UploadedDocument } from "./ubl.ts";
+import { sortGrokNewest } from "./xai-env.ts";
 
-/** xAI chat model id (https://api.x.ai/v1/chat/completions). */
-export const XAI_MODEL = "grok-4.5";
+/** Fallback if xai.env / secret has no working id. */
+export const DEFAULT_XAI_MODEL = "grok-4.5";
 
-/** Cloudflare AI Gateway / env.AI.run model id. */
-export const CF_GROK_MODEL = "xai/grok-4.5";
+/** @deprecated use selected model from xai.env or XAI_MODEL env */
+export const XAI_MODEL = DEFAULT_XAI_MODEL;
+
+export function cfGrokId(model: string): string {
+  return model.startsWith("xai/") ? model : `xai/${model}`;
+}
 
 export const XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export const SYSTEM_PROMPT = [
-  "Sen DENK AI’sın (Grok 4.5). Bu sohbet bizim denk-app Worker’ımızda çalışır.",
+  "Sen DENK AI’sın (Grok). Bu sohbet bizim denk-app Worker’ımızda çalışır.",
   "Kullanıcı evrakı bizim sunucuya yükler; sen o evrakın çıkarılan alanlarını görürsün.",
   "Müşteri makinesine bağlanma. ETA SQL’ine bağlanma. SQL yazma. Parola isteme.",
   "Tutar uydurma: evrakta yoksa yok de. Hesaplama yapma, evraktaki rakamı kullan.",
@@ -43,9 +48,9 @@ export function buildChatMessages(userText: string, doc: UploadedDocument | null
   ];
 }
 
-export function xaiChatBody(messages: ChatMessage[]): Record<string, unknown> {
+export function xaiChatBody(messages: ChatMessage[], model = DEFAULT_XAI_MODEL): Record<string, unknown> {
   return {
-    model: XAI_MODEL,
+    model,
     messages,
     reasoning_effort: "medium",
   };
@@ -85,20 +90,56 @@ export function extractModelText(result: unknown): string {
   return "";
 }
 
-export async function runXaiChat(apiKey: string, messages: ChatMessage[]): Promise<string> {
+export async function runXaiChat(
+  apiKey: string,
+  messages: ChatMessage[],
+  model = DEFAULT_XAI_MODEL,
+): Promise<string> {
   const res = await fetch(XAI_CHAT_URL, {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify(xaiChatBody(messages)),
+    body: JSON.stringify(xaiChatBody(messages, model)),
   });
   const payload = (await res.json()) as { error?: { message?: string } };
   if (!res.ok) {
     throw new Error(payload.error?.message ?? `xAI HTTP ${res.status}`);
   }
   const reply = extractModelText(payload);
-  if (!reply) throw new Error("Grok 4.5 boş cevap verdi.");
+  if (!reply) throw new Error(`${model} boş cevap verdi.`);
   return reply;
+}
+
+export async function listXaiModels(apiKey: string): Promise<string[]> {
+  const res = await fetch("https://api.x.ai/v1/models", {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) return [];
+  const payload = (await res.json()) as { data?: Array<{ id?: string }> };
+  return (payload.data ?? []).map((row) => row.id ?? "").filter(Boolean);
+}
+
+export async function probeXaiModel(apiKey: string, model: string): Promise<boolean> {
+  const res = await fetch(XAI_CHAT_URL, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: "ping" }],
+      max_tokens: 8,
+    }),
+  });
+  return res.ok;
+}
+
+export async function selectWorkingXaiModel(apiKey: string, candidates: string[]): Promise<string> {
+  for (const model of sortGrokNewest(candidates)) {
+    if (await probeXaiModel(apiKey, model)) return model;
+  }
+  throw new Error("xai.env / xAI hesabındaki Grok modellerinden çalışan bulunamadı.");
 }
