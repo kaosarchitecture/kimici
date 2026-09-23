@@ -2,8 +2,7 @@
 
 Sıfırdan yazılmış Türkçe arayüz. DENKWEB değildir.
 
-- `/#/` Bağlanan bilgisayarlar. Fiş o makinede kurulur.
-- `/#/yazdir` O bilgisayarın fişini yazdır.
+- `/#/` Bağlanan bilgisayarlar. Windows onayı o makinede alınır, işlem orada yapılır.
 
 ```bash
 npm install && npm run build

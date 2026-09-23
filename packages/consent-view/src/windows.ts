@@ -34,13 +34,3 @@ export function attestWindowsIdentity(input: WindowsIdentity): WindowsIdentity {
   }
   return { account, sid, interactive: true, attestedAt: input.attestedAt };
 }
-
-/** Demo-only stand-in. Live agent reads the interactive WindowsIdentity on that PC. */
-export function demoWindowsIdentity(now = new Date()): WindowsIdentity {
-  return {
-    account: "DEMO\\Kullanici",
-    sid: "S-1-5-21-DEMO-1001",
-    interactive: true,
-    attestedAt: now.toISOString(),
-  };
-}

@@ -1,9 +1,7 @@
 @echo off
 setlocal
 set "DENK_HUB_URL=https://app.denkmuhasebe.com"
-if not defined DENK_LOCAL set "DENK_LOCAL=C:\DENK\inbox"
 if not defined DENK_MACHINE_ID set "DENK_MACHINE_ID=%COMPUTERNAME%"
-if not exist "%DENK_LOCAL%" mkdir "%DENK_LOCAL%"
 if not exist "C:\DENK\agent" mkdir "C:\DENK\agent"
 where node >nul 2>&1
 if errorlevel 1 (
@@ -17,6 +15,6 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo %COMPUTERNAME% baglaniyor. Kayit klasoru: %DENK_LOCAL%
-node "C:\DENK\agent\agent.mjs" connect
+echo Windows oturumu sorulacak. SQL ve ETA varsa o oturumla girilir.
+node "C:\DENK\agent\agent.mjs"
 pause

@@ -7,6 +7,7 @@ import {
   onResult,
   onRun,
   publicSnapshot,
+  type AgentHello,
   type AgentResultMessage,
   type DeskSnapshot,
   type DeskState,
@@ -27,6 +28,7 @@ interface SocketMeta {
   machineId?: string;
   hostname?: string;
   connectedAt?: string;
+  windowsAccount?: string;
 }
 
 function json(data: unknown, status = 200): Response {
@@ -81,6 +83,7 @@ export class MachineHub extends DurableObject<Env> {
         type?: string;
         machineId?: string;
         hostname?: string;
+        windows?: AgentHello["windows"];
       };
     } catch {
       return;
@@ -90,26 +93,39 @@ export class MachineHub extends DurableObject<Env> {
       const machineId = message.machineId?.trim() ?? "";
       const hostname = message.hostname?.trim() || machineId;
       try {
+        const pack = buildKnowledgePack();
+        const outcome = await this.commit((state) =>
+          onHello(
+            state,
+            { type: "agent.hello", machineId, hostname, windows: message.windows as AgentHello["windows"] },
+            new Date(),
+            pack,
+          ),
+        );
         ws.serializeAttachment({
           role: "agent",
           machineId,
           hostname,
           connectedAt: new Date().toISOString(),
+          windowsAccount: outcome.job.windowsAccount,
         } satisfies SocketMeta);
         this.closeOtherAgents(machineId, ws);
-        const pack = buildKnowledgePack();
-        const outcome = await this.commit((state) => onHello(state, { type: "agent.hello", machineId, hostname }, new Date(), pack));
         this.sendAll(ws, outcome.toAgent);
         this.broadcast(await this.view());
-      } catch {
-        ws.send(JSON.stringify({ type: "error", error: "Bilgisayar kimliği geçersiz." }));
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Windows onayı yok.";
+        ws.send(JSON.stringify({ type: "error", error: text }));
+        ws.close(4001, "windows");
       }
       return;
     }
 
     if (message.type === "agent.result") {
       const attached = metaOf(ws);
-      if (!attached?.machineId) return;
+      if (!attached?.machineId || !attached.windowsAccount) {
+        ws.close(4001, "windows");
+        return;
+      }
       const result = message as AgentResultMessage;
       try {
         await this.commit((state) => ({
@@ -160,7 +176,7 @@ export class MachineHub extends DurableObject<Env> {
   private agentSocket(machineId: string): WebSocket | null {
     for (const ws of this.ctx.getWebSockets()) {
       const attached = metaOf(ws);
-      if (attached?.role === "agent" && attached.machineId === machineId) return ws;
+      if (attached?.role === "agent" && attached.machineId === machineId && attached.windowsAccount) return ws;
     }
     return null;
   }
@@ -177,7 +193,7 @@ export class MachineHub extends DurableObject<Env> {
     const rows: OnlineMachine[] = [];
     for (const ws of this.ctx.getWebSockets()) {
       const attached = metaOf(ws);
-      if (attached?.role === "agent" && attached.machineId) {
+      if (attached?.role === "agent" && attached.machineId && attached.windowsAccount) {
         rows.push({
           machineId: attached.machineId,
           hostname: attached.hostname || attached.machineId,
@@ -189,8 +205,20 @@ export class MachineHub extends DurableObject<Env> {
   }
 
   private async view(): Promise<DeskSnapshot> {
-    const state = (await this.ctx.storage.get<DeskState>(STATE_KEY)) ?? emptyDesk();
+    const state = await this.dropWithoutWindows();
     return publicSnapshot(state, this.online(), buildKnowledgePack());
+  }
+
+  private async dropWithoutWindows(): Promise<DeskState> {
+    const state = (await this.ctx.storage.get<DeskState>(STATE_KEY)) ?? emptyDesk();
+    const jobs = Object.fromEntries(Object.entries(state.jobs).filter(([, job]) => Boolean(job.windowsAccount)));
+    const lastByMachine = Object.fromEntries(
+      Object.entries(state.lastByMachine).filter(([, jobId]) => Boolean(jobs[jobId])),
+    );
+    if (Object.keys(jobs).length === Object.keys(state.jobs).length) return state;
+    const cleaned = { jobs, lastByMachine };
+    await this.ctx.storage.put(STATE_KEY, cleaned);
+    return cleaned;
   }
 
   private broadcast(snapshot: DeskSnapshot): void {

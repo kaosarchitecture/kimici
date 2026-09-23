@@ -39,7 +39,7 @@ export {
   type OnlineMachine,
 } from "./desk.ts";
 export { filterRecords, isViewField, sanitizeFields } from "./filter.ts";
-export { attestWindowsIdentity, demoWindowsIdentity } from "./windows.ts";
+export { attestWindowsIdentity } from "./windows.ts";
 export { documentFromFile, parseUblInvoice, type UploadedDocument } from "./ubl.ts";
 export {
   SCOPE_LABELS,

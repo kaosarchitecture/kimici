@@ -1,4 +1,6 @@
 import type { KnowledgePack } from "./knowledge.ts";
+import type { WindowsIdentity } from "./types.ts";
+import { attestWindowsIdentity } from "./windows.ts";
 
 /** One planned voucher produced on the connected computer. Source files stay there. */
 export interface DeskLine {
@@ -35,6 +37,9 @@ export interface JobRecord {
   note: string;
   vouchers: DeskVoucher[];
   modelNote?: string;
+  windowsAccount?: string;
+  eta?: EtaAccess;
+  read?: LocalRead;
 }
 
 export interface DeskState {
@@ -46,6 +51,28 @@ export interface AgentHello {
   type: "agent.hello";
   machineId: string;
   hostname: string;
+  windows: WindowsIdentity;
+}
+
+export interface EtaAccess {
+  sql: boolean;
+  companies: string[];
+  build: "open" | "closed";
+}
+
+export interface ReadVoucher {
+  company: string;
+  voucherNo: string;
+  date: string;
+  debit: string;
+  credit: string;
+}
+
+export interface LocalRead {
+  databases: string[];
+  companies: string[];
+  vouchers: ReadVoucher[];
+  files: string[];
 }
 
 export interface AgentResultMessage {
@@ -56,6 +83,8 @@ export interface AgentResultMessage {
   note: string;
   vouchers: DeskVoucher[];
   modelNote?: string;
+  eta?: EtaAccess;
+  read?: LocalRead;
 }
 
 export type HubToAgent = { type: "rules"; pack: KnowledgePack } | { type: "job.run"; jobId: string };
@@ -86,7 +115,7 @@ export interface DeskSnapshot {
 }
 
 export const DESK_WHERE =
-  "Kurallar bu sunucuda. Fiş, bağlanan bilgisayarın kendi log ve audit kayıtlarından o makinede kurulur.";
+  "Kurallar bu sunucuda. SQL ve ETA varsa bağlanan bilgisayar kendi Windows oturumuyla girer. Build o makinede açılır.";
 
 const MAX_JOBS = 40;
 const MACHINE_ID = /^[\p{L}\p{N}_.:-]{1,80}$/u;
@@ -117,9 +146,51 @@ function remember(state: DeskState, job: JobRecord): DeskState {
   return { jobs: trimmed, lastByMachine };
 }
 
+function cleanText(value: unknown, max: number): string {
+  return String(value ?? "").trim().slice(0, max);
+}
+
+function cleanRead(input: LocalRead | undefined): LocalRead | undefined {
+  if (!input) return undefined;
+  const databases = (input.databases ?? []).map((item) => cleanText(item, 80)).filter(Boolean).slice(0, 40);
+  const companies = (input.companies ?? []).map((item) => cleanText(item, 40)).filter(Boolean).slice(0, 40);
+  const files = (input.files ?? []).map((item) => cleanText(item, 120)).filter(Boolean).slice(0, 20);
+  const vouchers = (input.vouchers ?? []).slice(0, 20).map((row) => ({
+    company: cleanText(row.company, 40),
+    voucherNo: cleanText(row.voucherNo, 40),
+    date: cleanText(row.date, 40),
+    debit: cleanText(row.debit, 40),
+    credit: cleanText(row.credit, 40),
+  }));
+  return { databases, companies, files, vouchers };
+}
+
+function cleanEta(input: EtaAccess | undefined): EtaAccess | undefined {
+  if (!input) return undefined;
+  const companies = (input.companies ?? [])
+    .map((code) => String(code).trim())
+    .filter((code) => /^[\p{L}\p{N}_.-]{1,40}$/u.test(code))
+    .slice(0, 40);
+  const sql = input.sql === true;
+  return {
+    sql,
+    companies,
+    build: input.build === "open" && sql && companies.length > 0 ? "open" : "closed",
+  };
+}
+
 function jobOf(state: DeskState, jobId: string | undefined): JobRecord | null {
   if (!jobId) return null;
   return state.jobs[jobId] ?? null;
+}
+
+function requireWindows(identity: WindowsIdentity | undefined): WindowsIdentity {
+  if (!identity) throw new Error("Windows onayı yok.");
+  const attested = attestWindowsIdentity(identity);
+  if (/^DEMO\\/i.test(attested.account) || attested.sid.toUpperCase().includes("DEMO")) {
+    throw new Error("Windows kimliği sahte.");
+  }
+  return attested;
 }
 
 export function onHello(
@@ -130,14 +201,16 @@ export function onHello(
 ): { state: DeskState; toAgent: HubToAgent[]; job: JobRecord } {
   const machineId = assertMachineId(hello.machineId);
   const hostname = hello.hostname.trim().slice(0, 80) || machineId;
+  const windows = requireWindows(hello.windows);
   const job: JobRecord = {
     jobId: `job_${crypto.randomUUID()}`,
     machineId,
     hostname,
     status: "running",
     startedAt: now.toISOString(),
-    note: "Kurallar gönderildi. İşlem bu bilgisayarda başlıyor.",
+    note: `${windows.account} onayıyla bu bilgisayarda işlem başlıyor.`,
     vouchers: [],
+    windowsAccount: windows.account,
   };
   return {
     state: remember(state, job),
@@ -155,6 +228,8 @@ export function onRun(state: DeskState, machineIdRaw: string, hostname: string, 
 } {
   const machineId = assertMachineId(machineIdRaw);
   if (!online) throw new Error("Bu bilgisayar bağlı değil.");
+  const previous = jobOf(state, state.lastByMachine[machineId]);
+  if (!previous?.windowsAccount) throw new Error("Windows onayı yok.");
   const job: JobRecord = {
     jobId: `job_${crypto.randomUUID()}`,
     machineId,
@@ -163,6 +238,7 @@ export function onRun(state: DeskState, machineIdRaw: string, hostname: string, 
     startedAt: now.toISOString(),
     note: "Yeniden işleme bu bilgisayarda başladı.",
     vouchers: [],
+    windowsAccount: previous.windowsAccount,
   };
   return { state: remember(state, job), job };
 }
@@ -208,7 +284,10 @@ export function onResult(state: DeskState, message: AgentResultMessage, now: Dat
     startedAt: existing?.startedAt || now.toISOString(),
     finishedAt: now.toISOString(),
     note: String(message.note ?? "").slice(0, 500),
-    vouchers: (message.vouchers ?? []).slice(0, 20).map((row) => cleanVoucher(row)),
+    vouchers: [],
+    windowsAccount: existing?.windowsAccount,
+    eta: cleanEta(message.eta) ?? existing?.eta,
+    read: cleanRead(message.read) ?? existing?.read,
   };
   if (message.modelNote?.trim()) job.modelNote = message.modelNote.trim().slice(0, 2000);
   return remember(state, job);

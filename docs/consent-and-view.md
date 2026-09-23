@@ -58,8 +58,7 @@ Akış:
 6. Süre dolunca veya "Görünümü kapat" ile satırlar silinir.
 
 Çalışan arayüz: `apps/admin-ui` (DENKWEB’den bağımsız). Protokol: `packages/consent-view`.
-`apps/admin-ui` derlenir, `packages/consent-view` `npm run demo` ile `http://127.0.0.1:8788` üzerinde
-API ve yeni arayüzü birlikte sunar.
+Arayüz `apps/denk-app` ile yayınlanır.
 
 ## 5. Mesajlar
 

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { ConsentHub } from "../src/hub.ts";
-import { demoWindowsIdentity } from "../src/windows.ts";
+import type { WindowsIdentity } from "../src/types.ts";
+
+function officeIdentity(now = new Date()): WindowsIdentity {
+  return {
+    account: "OFIS\\Muhasebe",
+    sid: "S-1-5-21-1001",
+    interactive: true,
+    attestedAt: now.toISOString(),
+  };
+}
 
 const LOCAL = [
   {
@@ -31,7 +40,7 @@ describe("ConsentHub", () => {
     });
     expect(hub.snapshot().status).toBe("pending");
 
-    const identity = demoWindowsIdentity();
+    const identity = officeIdentity();
     hub.markPrompted(request.requestId, identity);
     expect(hub.snapshot().status).toBe("prompted");
 
@@ -39,7 +48,7 @@ describe("ConsentHub", () => {
       identity,
       fields: ["account", "amountText", "description"],
     });
-    expect(grant.identity.account).toBe("DEMO\\Kullanici");
+    expect(grant.identity.account).toBe("OFIS\\Muhasebe");
     expect(grant.fields).toEqual(["account", "amountText", "description"]);
 
     const view = hub.pushView(grant.grantId, LOCAL);
@@ -66,7 +75,7 @@ describe("ConsentHub", () => {
   it("revokes the in-memory view", () => {
     const hub = new ConsentHub();
     const request = hub.requestView({ purpose: "deneme", fields: ["account"] });
-    const grant = hub.grant(request.requestId, { identity: demoWindowsIdentity() });
+    const grant = hub.grant(request.requestId, { identity: officeIdentity() });
     hub.pushView(grant.grantId, LOCAL);
     hub.revoke(grant.grantId);
     expect(hub.snapshot().status).toBe("revoked");
@@ -105,7 +114,7 @@ describe("ConsentHub", () => {
     });
     const later = new Date("2026-09-23T12:00:02Z");
     expect(hub.snapshot(later).status).toBe("expired");
-    expect(() => hub.grant(request.requestId, { identity: demoWindowsIdentity(later), now: later })).toThrow(
+    expect(() => hub.grant(request.requestId, { identity: officeIdentity(later), now: later })).toThrow(
       /süresi doldu/,
     );
   });

@@ -30,6 +30,22 @@ export interface JobRecord {
   note: string;
   vouchers: DeskVoucher[];
   modelNote?: string;
+  windowsAccount?: string;
+  eta?: EtaAccess;
+  read?: LocalRead;
+}
+
+export interface LocalRead {
+  databases: string[];
+  companies: string[];
+  vouchers: { company: string; voucherNo: string; date: string; debit: string; credit: string }[];
+  files: string[];
+}
+
+export interface EtaAccess {
+  sql: boolean;
+  companies: string[];
+  build: "open" | "closed";
 }
 
 export interface MachineView {
@@ -68,5 +84,3 @@ export function deskSocketUrl(): string {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${location.host}/api/desk`;
 }
-
-export const PRINT_MACHINE_KEY = "denk-machine";

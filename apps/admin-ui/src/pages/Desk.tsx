@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { deskSocketUrl, loadDesk, PRINT_MACHINE_KEY, runOnMachine, type DeskSnapshot, type MachineView } from "../desk-api.ts";
+import { deskSocketUrl, loadDesk, runOnMachine, type DeskSnapshot, type MachineView } from "../desk-api.ts";
 
 const STATUS: Record<string, string> = {
   running: "İşleniyor",
@@ -66,7 +66,7 @@ export function Desk() {
         <a className="as-btn" href="/denk-baglan/Baglan.cmd" download="Baglan.cmd">
           Bu bilgisayarı bağla
         </a>
-        <p className="lede">İndirilen dosyayı çalıştır. Kayıtlar C:\DENK\inbox içine konur. Fiş burada görünür.</p>
+        <p className="lede">İndirilen dosyayı çalıştır. Windows onayı bu bilgisayarda sorulur.</p>
         {desk && desk.machines.length === 0 ? <p className="empty">Bağlı bilgisayar yok.</p> : null}
         <div className="machines">
           {desk?.machines.map((row) => (
@@ -100,55 +100,26 @@ function MachineResult(props: { machine: MachineView; busy: boolean; onRun: () =
   const job = props.machine.lastJob;
   return (
     <>
-      <p className="lede">{job?.note ?? "Bağlanınca bu bilgisayar kendi klasörünü işler."}</p>
+      <p className="lede">{job?.windowsAccount ? `Windows: ${job.windowsAccount}` : "Windows onayı yok."}</p>
+      {job?.read ? (
+        <>
+          <p className="lede">{job.read.databases.length > 0 ? `SQL: ${job.read.databases.join(", ")}` : "SQL yok."}</p>
+          <p className="lede">{job.read.companies.length > 0 ? `ETA: ${job.read.companies.join(", ")}` : "ETA yok."}</p>
+          <p className="lede">{job.eta?.build === "open" ? "Build açık." : "Build kapalı."}</p>
+          {job.read.vouchers.map((voucher) => (
+            <p key={`${voucher.company}-${voucher.voucherNo}`} className="lede">
+              {voucher.company} · {voucher.voucherNo} · {voucher.date} · {voucher.debit} / {voucher.credit}
+            </p>
+          ))}
+          {job.read.files.length > 0 ? <p className="lede">{job.read.files.join(", ")}</p> : null}
+        </>
+      ) : null}
+      <p className="lede">{job?.note ?? "Windows onayı gelince bu bilgisayardaki SQL ve ETA açılır."}</p>
       <div className="row">
-        <button type="button" disabled={props.busy || !props.machine.online} onClick={props.onRun}>
-          {props.busy || job?.status === "running" ? "Bu bilgisayarda işleniyor…" : "Bu bilgisayarda işle"}
+        <button type="button" disabled={props.busy || !props.machine.online || !job?.windowsAccount} onClick={props.onRun}>
+          {props.busy || job?.status === "running" ? "Bu bilgisayarda açılıyor…" : "Bu bilgisayarda aç"}
         </button>
-        {job && job.vouchers.length > 0 ? (
-          <a
-            className="as-btn ghost"
-            href="#/yazdir"
-            onClick={() => sessionStorage.setItem(PRINT_MACHINE_KEY, props.machine.machineId)}
-          >
-            Fişi yazdır
-          </a>
-        ) : null}
       </div>
-      {job?.vouchers.map((voucher) => (
-        <article key={`${voucher.sourceName}-${voucher.invoiceNo}`} className="voucher">
-          <h3>
-            {voucher.invoiceNo || voucher.sourceName} · {voucher.sourceKind}
-          </h3>
-          <p className="lede">
-            {voucher.supplierName || "Unvan yok"} · {voucher.date} · kaynak {voucher.sourceName}
-          </p>
-          <table className="ledger">
-            <thead>
-              <tr>
-                <th>Sıra</th>
-                <th>Hesap</th>
-                <th>B/A</th>
-                <th>Tutar</th>
-                <th>Açıklama</th>
-              </tr>
-            </thead>
-            <tbody>
-              {voucher.lines.map((line) => (
-                <tr key={line.seq} className={line.description === "İND.KDV." ? "vat" : undefined}>
-                  <td>{line.seq}</td>
-                  <td>{line.account}</td>
-                  <td>{line.side}</td>
-                  <td className="num">{line.amountText}</td>
-                  <td>{line.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {voucher.blockers.length > 0 ? <p className="lede">{voucher.blockers.join(" ")}</p> : null}
-        </article>
-      ))}
-      {job?.modelNote ? <p className="preview">{job.modelNote}</p> : null}
     </>
   );
 }
