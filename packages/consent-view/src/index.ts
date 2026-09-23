@@ -23,6 +23,7 @@ export {
   machineViews,
   onDisconnect,
   onHello,
+  onLink,
   onResult,
   onRun,
   publicSnapshot,

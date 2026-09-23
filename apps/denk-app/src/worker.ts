@@ -4,6 +4,7 @@ import {
   emptyDesk,
   onDisconnect,
   onHello,
+  onLink,
   onResult,
   onRun,
   publicSnapshot,
@@ -35,6 +36,21 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status });
 }
 
+function approvalKey(machineId: string): string {
+  return `approval:${machineId}`;
+}
+
+function isApprovalCode(code: string): boolean {
+  return /^[A-Za-z0-9_-]{20,64}$/.test(code);
+}
+
+function sameCode(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  return diff === 0;
+}
+
 function metaOf(ws: WebSocket): SocketMeta | null {
   const value = ws.deserializeAttachment();
   if (!value || typeof value !== "object") return null;
@@ -59,6 +75,21 @@ export class MachineHub extends DurableObject<Env> {
       return json(await this.view());
     }
 
+    const approve = /^\/api\/machines\/([^/]+)\/approve$/.exec(url.pathname);
+    if (approve && request.method === "POST") {
+      const machineId = decodeURIComponent(approve[1] ?? "");
+      const body = (await request.json().catch(() => null)) as { code?: unknown } | null;
+      const code = typeof body?.code === "string" ? body.code : "";
+      try {
+        const job = await this.approve(machineId, code);
+        return json({ jobId: job.jobId, machineId: job.machineId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Bağlanamadı.";
+        const status = message.includes("bağlı değil") ? 409 : 403;
+        return json({ error: message }, status);
+      }
+    }
+
     const run = /^\/api\/machines\/([^/]+)\/run$/.exec(url.pathname);
     if (run && request.method === "POST") {
       const machineId = decodeURIComponent(run[1] ?? "");
@@ -77,12 +108,19 @@ export class MachineHub extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (metaOf(ws)?.role !== "agent") return;
-    let message: { type?: string; machineId?: string; hostname?: string };
+    let message: {
+      type?: string;
+      machineId?: string;
+      hostname?: string;
+      approvalCode?: string;
+      windows?: AgentHello["windows"];
+    };
     try {
       message = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw)) as {
         type?: string;
         machineId?: string;
         hostname?: string;
+        approvalCode?: string;
         windows?: AgentHello["windows"];
       };
     } catch {
@@ -92,8 +130,15 @@ export class MachineHub extends DurableObject<Env> {
     if (message.type === "agent.hello") {
       const machineId = message.machineId?.trim() ?? "";
       const hostname = message.hostname?.trim() || machineId;
+      const approvalCode = typeof message.approvalCode === "string" ? message.approvalCode : "";
+      if (!isApprovalCode(approvalCode)) {
+        ws.send(JSON.stringify({ type: "error", error: "Onay kodu yok." }));
+        ws.close(4001, "windows");
+        return;
+      }
       try {
         const pack = buildKnowledgePack();
+        await this.ctx.storage.put(approvalKey(machineId), approvalCode);
         const outcome = await this.commit((state) =>
           onHello(
             state,
@@ -155,6 +200,24 @@ export class MachineHub extends DurableObject<Env> {
     if (this.agentSocket(attached.machineId)) return;
     await this.commit((state) => ({ state: onDisconnect(state, attached.machineId as string, new Date()) }));
     this.broadcast(await this.view());
+  }
+
+  private async approve(machineId: string, code: string): Promise<JobRecord> {
+    const socket = this.agentSocket(machineId);
+    if (!socket) throw new Error("Bu bilgisayar bağlı değil.");
+    if (!isApprovalCode(code)) throw new Error("Onay kodu geçersiz.");
+    const outcome = await this.ctx.blockConcurrencyWhile(async () => {
+      const stored = await this.ctx.storage.get<string>(approvalKey(machineId));
+      if (!stored || !sameCode(stored, code)) throw new Error("Onay kodu geçersiz.");
+      const current = (await this.ctx.storage.get<DeskState>(STATE_KEY)) ?? emptyDesk();
+      const linked = onLink(current, machineId, new Date());
+      await this.ctx.storage.put(STATE_KEY, linked.state);
+      await this.ctx.storage.delete(approvalKey(machineId));
+      return linked;
+    });
+    socket.send(JSON.stringify({ type: "job.run", jobId: outcome.job.jobId }));
+    this.broadcast(await this.view());
+    return outcome.job;
   }
 
   private async startRun(machineId: string): Promise<JobRecord> {

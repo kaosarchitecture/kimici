@@ -15,7 +15,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo Windows oturumu sorulacak. Bu bilgisayar SQL ve ETA yolunu arar.
-echo xAI anahtari yalniz C:\DENK\secrets\xai.env dosyasindan okunur.
+echo Tarayici acilacak. Sitede Bagla'ya basin.
+echo Bu bilgisayar SQL ve ETA yolunu arar. xAI anahtari C:\DENK\secrets\xai.env icindedir.
 node "C:\DENK\agent\agent.mjs"
 pause

@@ -1,5 +1,6 @@
 import type { AgentResultMessage } from "../../../packages/consent-view/src/desk.ts";
 import type { WindowsIdentity } from "../../../packages/consent-view/src/types.ts";
+import { approvalPageUrl, newApprovalCode, openApprovalPage } from "./approve-page.ts";
 import { pullKnowledge } from "./hub.ts";
 import { handleHubMessage, type AgentRuntime, type HubMessage } from "./session.ts";
 import { WindowsAuthError } from "./windows-auth.ts";
@@ -9,6 +10,8 @@ export interface ConnectOptions {
   machineId: string;
   hostname: string;
   authorize: () => Promise<WindowsIdentity>;
+  openApproval?: (url: string) => void;
+  approvalCode?: string;
 }
 
 export function agentSocketUrl(hubUrl: string): string {
@@ -19,6 +22,9 @@ export function agentSocketUrl(hubUrl: string): string {
 
 export async function connectOnce(options: ConnectOptions): Promise<void> {
   const windows = await options.authorize();
+  const approvalCode = options.approvalCode ?? newApprovalCode();
+  const page = approvalPageUrl(options.hubUrl, options.machineId, approvalCode);
+  (options.openApproval ?? openApprovalPage)(page);
   const runtime: AgentRuntime = {
     pack: await pullKnowledge(options.hubUrl),
     machineId: options.machineId,
@@ -44,6 +50,7 @@ export async function connectOnce(options: ConnectOptions): Promise<void> {
           machineId: options.machineId,
           hostname: options.hostname,
           windows,
+          approvalCode,
         }),
       );
     });
@@ -77,11 +84,22 @@ async function onMessage(
 }
 
 export async function connectLoop(options: ConnectOptions): Promise<void> {
+  const approvalCode = options.approvalCode ?? newApprovalCode();
+  let opened = false;
   let delay = 1000;
   for (;;) {
     try {
       console.log(`${options.hostname} merkeze bağlanıyor.`);
-      await connectOnce(options);
+      await connectOnce({
+        ...options,
+        approvalCode,
+        openApproval: (url) => {
+          if (opened) return;
+          opened = true;
+          console.log("Tarayıcı açıldı. Sitede Bağla'ya basın.");
+          (options.openApproval ?? openApprovalPage)(url);
+        },
+      });
       delay = 1000;
     } catch (error) {
       if (error instanceof WindowsAuthError) throw error;

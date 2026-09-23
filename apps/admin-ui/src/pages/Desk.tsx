@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { deskSocketUrl, loadDesk, runOnMachine, type DeskSnapshot, type MachineView } from "../desk-api.ts";
+import { approveMachine, deskSocketUrl, loadDesk, runOnMachine, type DeskSnapshot, type MachineView } from "../desk-api.ts";
 
 const STATUS: Record<string, string> = {
+  pending: "Onay bekliyor",
   running: "İşleniyor",
   done: "Tamam",
   empty: "Kayıt yok",
@@ -10,11 +11,21 @@ const STATUS: Record<string, string> = {
   failed: "Hata",
 };
 
+function pairingFromHash(): { machineId: string; code: string } | null {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const machineId = params.get("makine")?.trim() ?? "";
+  const code = params.get("onay")?.trim() ?? "";
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(code) || !machineId) return null;
+  return { machineId, code };
+}
+
 export function Desk() {
   const [desk, setDesk] = useState<DeskSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pairing, setPairing] = useState(pairingFromHash);
+  const [linked, setLinked] = useState(false);
 
   useEffect(() => {
     let stop = false;
@@ -47,6 +58,7 @@ export function Desk() {
   }, []);
 
   const machine = desk?.machines.find((row) => row.machineId === selected) ?? desk?.machines[0] ?? null;
+  const waiting = pairing ? desk?.machines.find((row) => row.machineId === pairing.machineId) ?? null : null;
 
   async function run(row: MachineView): Promise<void> {
     setBusy(true);
@@ -60,14 +72,30 @@ export function Desk() {
     }
   }
 
+  async function link(): Promise<void> {
+    if (!pairing) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await approveMachine(pairing.machineId, pairing.code);
+      setLinked(true);
+      setPairing(null);
+      window.history.replaceState(null, "", window.location.pathname);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bağlanamadı.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className={machine ? "desk" : "desk solo"}>
+    <div className={machine || pairing ? "desk" : "desk solo"}>
       <section className="sheet">
         <a className="as-btn" href="/denk-baglan/Baglan.cmd" download="Baglan.cmd">
           Bu bilgisayarı bağla
         </a>
-        <p className="lede">Bir kez çalıştır. Windows onayı o bilgisayarda sorulur. Ajan SQL ve ETA yolunu arar, xAI o bilgisayardaki anahtarla cevaplar.</p>
-        {desk && desk.machines.length === 0 ? <p className="empty">Bağlı bilgisayar yok.</p> : null}
+        <p className="lede">Dosyayı çalıştırın. PowerShell bu sayfayı açar. Bağla'ya basın.</p>
+        {desk && desk.machines.length === 0 && !pairing ? <p className="empty">Bağlı bilgisayar yok.</p> : null}
         <div className="machines">
           {desk?.machines.map((row) => (
             <button
@@ -86,7 +114,27 @@ export function Desk() {
         </div>
         {error ? <p className="lede">{error}</p> : null}
       </section>
-      {machine ? (
+      {pairing ? (
+        <section className="sheet">
+          <h2>{pairing.machineId} bağlanmak istiyor</h2>
+          <p className="lede">
+            {waiting?.lastJob?.windowsAccount ? `Windows: ${waiting.lastJob.windowsAccount}` : "Bilgisayar bağlanıyor."}
+          </p>
+          <p className="lede">Bu bilgisayar bu masaya bağlanacak.</p>
+          <div className="row">
+            <button type="button" disabled={busy || !waiting?.online} onClick={() => void link()}>
+              {busy ? "Bağlanıyor…" : "Bağla"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {linked ? (
+        <section className="sheet">
+          <h2>Bağlandı</h2>
+          <p className="lede">Onay bu sayfadan verildi. Okuma o bilgisayarda sürer.</p>
+        </section>
+      ) : null}
+      {machine && !pairing ? (
         <section className="sheet">
           <h2>{machine.machineId}</h2>
           <MachineResult machine={machine} rulesVersion={desk?.rulesVersion ?? ""} busy={busy} onRun={() => void run(machine)} />
@@ -149,7 +197,7 @@ function MachineResult(props: { machine: MachineView; rulesVersion: string; busy
       {job?.modelNote ? <p className="lede">xAI: {job.modelNote}</p> : null}
       <p className="lede">{job?.note ?? "Windows onayı gelince bu bilgisayardan okunan fişler burada açılır."}</p>
       <div className="row">
-        <button type="button" disabled={props.busy || !props.machine.online || !job?.windowsAccount} onClick={props.onRun}>
+        <button type="button" disabled={props.busy || !props.machine.online || !job?.windowsAccount || job?.status === "pending"} onClick={props.onRun}>
           {props.busy || job?.status === "running" ? "Bu bilgisayarda açılıyor…" : "Bu bilgisayarda aç"}
         </button>
       </div>

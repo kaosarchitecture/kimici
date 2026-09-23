@@ -4,6 +4,7 @@ import {
   emptyDesk,
   onDisconnect,
   onHello,
+  onLink,
   onResult,
   onRun,
   publicSnapshot,
@@ -30,17 +31,22 @@ function voucher(invoiceNo: string): DeskVoucher {
 }
 
 describe("connected computers", () => {
-  it("sends rules to the computer that connected and starts work only there", () => {
+  it("registers the computer and waits for the browser approval", () => {
     const first = onHello(emptyDesk(), { type: "agent.hello", machineId: "pc-a", hostname: "PC-A", windows: { account: "OFIS\\PC-A", sid: "S-1-5-21-1001", interactive: true, attestedAt: NOW.toISOString() } }, NOW, pack);
     const second = onHello(first.state, { type: "agent.hello", machineId: "pc-b", hostname: "PC-B", windows: { account: "OFIS\\PC-B", sid: "S-1-5-21-1002", interactive: true, attestedAt: NOW.toISOString() } }, NOW, pack);
 
-    expect(first.toAgent[0]).toEqual({ type: "rules", pack });
-    expect(first.toAgent[1]).toEqual({ type: "job.run", jobId: first.job.jobId });
-    expect(JSON.stringify(first.toAgent[1])).not.toMatch(/select|sql|path|xml/i);
+    expect(first.toAgent).toEqual([{ type: "rules", pack }]);
+    expect(first.job.status).toBe("pending");
+    expect(JSON.stringify(first.toAgent)).not.toMatch(/select|sql|path|xml|job\.run/i);
     expect(first.job.machineId).toBe("pc-a");
     expect(second.job.machineId).toBe("pc-b");
     expect(second.state.lastByMachine["pc-a"]).toBe(first.job.jobId);
     expect(second.state.lastByMachine["pc-b"]).toBe(second.job.jobId);
+    expect(() => onRun(first.state, "pc-a", "PC-A", true, NOW)).toThrow(/Bağla/);
+    const linked = onLink(first.state, "pc-a", NOW);
+    expect(linked.job.status).toBe("running");
+    expect(linked.job.jobId).toBe(first.job.jobId);
+    expect(linked.job.windowsAccount).toBe("OFIS\\PC-A");
   });
 
   it("keeps one computer's voucher off the other computer", () => {

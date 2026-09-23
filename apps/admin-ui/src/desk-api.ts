@@ -24,7 +24,7 @@ export interface JobRecord {
   jobId: string;
   machineId: string;
   hostname: string;
-  status: "running" | "done" | "empty" | "blocked" | "dropped" | "failed";
+  status: "pending" | "running" | "done" | "empty" | "blocked" | "dropped" | "failed";
   startedAt: string;
   finishedAt?: string;
   note: string;
@@ -79,6 +79,18 @@ export async function loadDesk(): Promise<DeskSnapshot> {
   const res = await fetch("/api/machines");
   if (!res.ok) throw new Error("Merkez kapalı.");
   return (await res.json()) as DeskSnapshot;
+}
+
+export async function approveMachine(machineId: string, code: string): Promise<void> {
+  const res = await fetch(`/api/machines/${encodeURIComponent(machineId)}/approve`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) {
+    const body = (await res.json()) as { error?: string };
+    throw new Error(body.error ?? "Bağlanamadı.");
+  }
 }
 
 export async function runOnMachine(machineId: string): Promise<void> {

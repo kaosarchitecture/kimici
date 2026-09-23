@@ -25,7 +25,7 @@ export interface DeskVoucher {
   lines: DeskLine[];
 }
 
-export type JobStatus = "running" | "done" | "empty" | "blocked" | "dropped" | "failed";
+export type JobStatus = "pending" | "running" | "done" | "empty" | "blocked" | "dropped" | "failed";
 
 export interface JobRecord {
   jobId: string;
@@ -228,20 +228,33 @@ export function onHello(
     jobId: `job_${crypto.randomUUID()}`,
     machineId,
     hostname,
-    status: "running",
+    status: "pending",
     startedAt: now.toISOString(),
-    note: `${windows.account} onayıyla bu bilgisayarda işlem başlıyor.`,
+    note: "Tarayıcı açıldı. Bağla'ya basın.",
     vouchers: [],
     windowsAccount: windows.account,
   };
   return {
     state: remember(state, job),
     job,
-    toAgent: [
-      { type: "rules", pack },
-      { type: "job.run", jobId: job.jobId },
-    ],
+    toAgent: [{ type: "rules", pack }],
   };
+}
+
+/** Browser approval on the desk. SQL does not start before this. */
+export function onLink(state: DeskState, machineIdRaw: string, now: Date): { state: DeskState; job: JobRecord } {
+  const machineId = assertMachineId(machineIdRaw);
+  const previous = jobOf(state, state.lastByMachine[machineId]);
+  if (!previous?.windowsAccount || previous.status !== "pending") {
+    throw new Error("Bağlama beklenmiyor.");
+  }
+  const job: JobRecord = {
+    ...previous,
+    status: "running",
+    startedAt: now.toISOString(),
+    note: `${previous.windowsAccount} onayıyla bu bilgisayarda işlem başlıyor.`,
+  };
+  return { state: remember(state, job), job };
 }
 
 export function onRun(state: DeskState, machineIdRaw: string, hostname: string, online: boolean, now: Date): {
@@ -252,6 +265,7 @@ export function onRun(state: DeskState, machineIdRaw: string, hostname: string, 
   if (!online) throw new Error("Bu bilgisayar bağlı değil.");
   const previous = jobOf(state, state.lastByMachine[machineId]);
   if (!previous?.windowsAccount) throw new Error("Windows onayı yok.");
+  if (previous.status === "pending") throw new Error("Tarayıcıda Bağla bekleniyor.");
   const job: JobRecord = {
     jobId: `job_${crypto.randomUUID()}`,
     machineId,
@@ -318,12 +332,15 @@ export function onResult(state: DeskState, message: AgentResultMessage, now: Dat
 export function onDisconnect(state: DeskState, machineId: string, now: Date): DeskState {
   const jobs = { ...state.jobs };
   for (const job of Object.values(jobs)) {
-    if (job.machineId === machineId && job.status === "running") {
+    if (job.machineId === machineId && (job.status === "running" || job.status === "pending")) {
+      const pending = job.status === "pending";
       jobs[job.jobId] = {
         ...job,
         status: "dropped",
         finishedAt: now.toISOString(),
-        note: "Bilgisayar bağlantısı koptu. İşlem o makinede tamamlanmadı.",
+        note: pending
+          ? "Bağlama yarıda kaldı. Dosyayı yeniden çalıştırın."
+          : "Bilgisayar bağlantısı koptu. İşlem o makinede tamamlanmadı.",
       };
     }
   }

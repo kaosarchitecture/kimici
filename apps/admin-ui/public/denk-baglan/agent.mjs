@@ -3826,6 +3826,28 @@ var require_lib = __commonJS({
 // src/cli.ts
 import { hostname } from "node:os";
 
+// src/approve-page.ts
+import { execFile } from "node:child_process";
+import { randomBytes } from "node:crypto";
+function newApprovalCode() {
+  return randomBytes(18).toString("base64url");
+}
+function approvalPageUrl(hubUrl, machineId2, code) {
+  const url = new URL(hubUrl);
+  url.search = "";
+  url.hash = `onay=${encodeURIComponent(code)}&makine=${encodeURIComponent(machineId2)}`;
+  return url.toString();
+}
+function openApprovalPage(url) {
+  if (process.platform !== "win32") {
+    console.log(url);
+    return;
+  }
+  execFile("rundll32.exe", ["url.dll,FileProtocolHandler", url], { windowsHide: true }, (error) => {
+    if (error) console.log(url);
+  });
+}
+
 // src/hub.ts
 async function pullKnowledge(hubUrl) {
   const res = await fetch(new URL("/api/knowledge", hubUrl));
@@ -4675,11 +4697,11 @@ async function readDefaultEnv() {
 }
 
 // src/windows-sql.ts
-import { execFile as execFile2 } from "node:child_process";
+import { execFile as execFile3 } from "node:child_process";
 import { promisify as promisify2 } from "node:util";
 
 // src/windows-auth.ts
-import { execFile } from "node:child_process";
+import { execFile as execFile2 } from "node:child_process";
 import { promisify } from "node:util";
 
 // ../../packages/consent-view/src/windows.ts
@@ -4715,7 +4737,7 @@ function attestWindowsIdentity(input) {
 }
 
 // src/windows-auth.ts
-var execFileAsync = promisify(execFile);
+var execFileAsync = promisify(execFile2);
 var WindowsAuthError = class extends Error {
   constructor(message) {
     super(message);
@@ -4747,9 +4769,6 @@ async function authorizeWindowsSession(read, ask, now = /* @__PURE__ */ new Date
     throw new WindowsAuthError(error instanceof Error ? error.message : "Windows kimli\u011Fi ge\xE7ersiz.");
   }
 }
-function psSingleQuoted(value) {
-  return `'${value.replace(/'/g, "''")}'`;
-}
 async function readWindowsIdentity() {
   if (process.platform !== "win32") {
     throw new WindowsAuthError("Bu ajan yaln\u0131z Windows oturumunda \xE7al\u0131\u015F\u0131r.");
@@ -4774,32 +4793,9 @@ $wi = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     interactive: parsed.interactive === true
   };
 }
-async function askWindowsUser(account) {
-  if (process.platform !== "win32") {
-    throw new WindowsAuthError("Bu ajan yaln\u0131z Windows oturumunda \xE7al\u0131\u015F\u0131r.");
-  }
-  console.log(`Windows onay\u0131 a\xE7\u0131ld\u0131: ${account}. Ekrandaki soruya evet deyin.`);
-  const script = `
-Add-Type -AssemblyName System.Windows.Forms
-$answer = [System.Windows.Forms.MessageBox]::Show(
-  ('DENK, ' + ${psSingleQuoted(account)} + ' oturumuyla bu bilgisayarda \xE7al\u0131\u015Fs\u0131n m\u0131?'),
-  'DENK',
-  [System.Windows.Forms.MessageBoxButtons]::YesNo,
-  [System.Windows.Forms.MessageBoxIcon]::Question,
-  [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
-  [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly
-)
-if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { 'yes' } else { 'no' }
-`;
-  const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-STA", "-Command", script], {
-    windowsHide: false,
-    timeout: 12e4
-  });
-  return stdout.trim().toLowerCase() === "yes";
-}
 
 // src/windows-sql.ts
-var execFileAsync2 = promisify2(execFile2);
+var execFileAsync2 = promisify2(execFile3);
 function sqlTargetsFromNames(names) {
   const out = [];
   for (const name of names) {
@@ -4890,12 +4886,12 @@ async function queryWindowsSql(server, database, statement) {
   assertSelect(statement);
   const connectionString = localConnectionString(server, database);
   const script = `
-$connection = New-Object System.Data.SqlClient.SqlConnection ${psSingleQuoted2(connectionString)}
+$connection = New-Object System.Data.SqlClient.SqlConnection ${psSingleQuoted(connectionString)}
 $connection.Open()
 try {
   $command = $connection.CreateCommand()
   $command.CommandTimeout = 8
-  $command.CommandText = ${psSingleQuoted2(statement)}
+  $command.CommandText = ${psSingleQuoted(statement)}
   $reader = $command.ExecuteReader()
   $rows = @()
   while ($reader.Read()) {
@@ -4931,7 +4927,7 @@ function assertSelect(statement) {
     throw new Error("SQL c\xFCmlesi bu kap\u0131dan ge\xE7emez.");
   }
 }
-function psSingleQuoted2(value) {
+function psSingleQuoted(value) {
   return `'${value.replace(/'/g, "''")}'`;
 }
 function parseRows(stdout) {
@@ -5033,6 +5029,9 @@ function agentSocketUrl(hubUrl) {
 }
 async function connectOnce(options) {
   const windows = await options.authorize();
+  const approvalCode = options.approvalCode ?? newApprovalCode();
+  const page = approvalPageUrl(options.hubUrl, options.machineId, approvalCode);
+  (options.openApproval ?? openApprovalPage)(page);
   const runtime = {
     pack: await pullKnowledge(options.hubUrl),
     machineId: options.machineId
@@ -5057,7 +5056,8 @@ async function connectOnce(options) {
           type: "agent.hello",
           machineId: options.machineId,
           hostname: options.hostname,
-          windows
+          windows,
+          approvalCode
         })
       );
     });
@@ -5083,11 +5083,22 @@ async function onMessage(runtime, raw, send) {
   if (next.outbound) send(next.outbound);
 }
 async function connectLoop(options) {
+  const approvalCode = options.approvalCode ?? newApprovalCode();
+  let opened = false;
   let delay = 1e3;
   for (; ; ) {
     try {
       console.log(`${options.hostname} merkeze ba\u011Flan\u0131yor.`);
-      await connectOnce(options);
+      await connectOnce({
+        ...options,
+        approvalCode,
+        openApproval: (url) => {
+          if (opened) return;
+          opened = true;
+          console.log("Taray\u0131c\u0131 a\xE7\u0131ld\u0131. Sitede Ba\u011Fla'ya bas\u0131n.");
+          (options.openApproval ?? openApprovalPage)(url);
+        }
+      });
       delay = 1e3;
     } catch (error) {
       if (error instanceof WindowsAuthError) throw error;
@@ -5106,7 +5117,7 @@ try {
     hubUrl: hub,
     machineId,
     hostname: hostname(),
-    authorize: () => authorizeWindowsSession(readWindowsIdentity, askWindowsUser)
+    authorize: () => authorizeWindowsSession(readWindowsIdentity, async () => true)
   });
 } catch (error) {
   if (error instanceof WindowsAuthError) {
