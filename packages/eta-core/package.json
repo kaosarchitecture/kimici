@@ -1,0 +1,23 @@
+{
+  "name": "@denk/eta-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic ETA V.8 SQL accounting core: rule planners, guards and row builders. No database access.",
+  "type": "module",
+  "main": "src/index.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}
