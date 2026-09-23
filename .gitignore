@@ -8,3 +8,4 @@ xai.env
 secrets/
 .DS_Store
 .wrangler/
+inbox/

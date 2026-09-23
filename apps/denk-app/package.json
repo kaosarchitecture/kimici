@@ -1,0 +1,14 @@
+{
+  "name": "@denk/app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin hub. Serves the rule pack and routes each connected computer to work on itself.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8788 --local",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}

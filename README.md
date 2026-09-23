@@ -12,8 +12,7 @@ kendi bilgisayarında uygulayan SaaS.
 - İzinli görünüm protokolü: `packages/consent-view`.
 - Yeni web arayüzü: `apps/admin-ui` — DENKWEB’den bağımsız, sıfırdan.
 - Cloudflare Worker: `apps/denk-app` (denk-central / denkmuhasebe.com değil).
-- SaaS: bilgi merkeze (`GET /api/knowledge`), iş Windows ajanına (`apps/denk-agent`).
-  Onlarca kullanıcı fişi bizim sunucuda sıraya sokmaz.
+- SaaS: kural paketi merkezde (`GET /api/knowledge`). Bağlanan her bilgisayar kendi log, audit ve XML dosyasını kendi üstünde işler (`apps/denk-agent`). Evrak sunucuya yüklenmez.
 
 ```bash
 cd packages/eta-core && npm install && npm test

@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "connect": "node --experimental-strip-types src/cli.ts connect",
     "process": "node --experimental-strip-types src/cli.ts"
   },
   "devDependencies": {

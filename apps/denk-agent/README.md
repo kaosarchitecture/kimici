@@ -1,18 +1,21 @@
-# DENK ajanı (Windows saha)
+# DENK ajanı (bağlanan bilgisayar)
 
-SaaS yönü: **iş bu makinede**, bilgi bizim sunucudan.
+Kurallar bizim sunucuda. İş bu makinede.
 
 ```
-Windows (müşteri)
-  DENK ajanı  ← GET /api/knowledge  ←  denk-app (ince merkez)
-  evrak + ETA burada okunur / işlenir
+bu bilgisayar  --WSS-->  denk-app  GET /api/knowledge
+log, audit, XML burada okunur
+fiş burada kurulur
 ```
 
-Onlarca kullanıcı bağlanınca fiş bizim Worker’da kuyruğa girmez. Her PC kendi işini yapar. Merkez yalnız kural paketi verir (İND.KDV., 100 01, eşikler). Müşteri defteri merkeze gelmez.
+Kim bağlanırsa fiş onun klasöründen çıkar. ETA SQL'ine buradan gidilmez. Kaynak dosya sunucuya yüklenmez.
 
 ```bash
-export DENK_HUB_URL=https://denk-app.<hesap>.workers.dev
-npm run process -- evrak.xml
+export DENK_HUB_URL=http://127.0.0.1:8788
+export DENK_LOCAL=./inbox
+npm run connect
 ```
 
-Grok çağrısı varsa o da **bu** Windows’taki `C:\DENK\secrets\xai.env` ile yapılır; bizim sunucu kotası paylaşılmaz.
+`inbox` içine `*.xml`, `*.audit.json` veya `*.log` koyun. Tek dosya için: `npm run process -- evrak.xml`.
+
+Model çağrısı varsa o da bu makinedeki `XAI_API_KEY` veya Windows'ta `C:\DENK\secrets\xai.env` ile yapılır. Anahtar yoksa fişi kural motoru kurar.

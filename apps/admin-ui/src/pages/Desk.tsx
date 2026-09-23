@@ -1,166 +1,170 @@
 import { useEffect, useState } from "react";
-import type { Evrak } from "./types.ts";
+import { deskSocketUrl, loadDesk, PRINT_MACHINE_KEY, runOnMachine, type DeskSnapshot, type MachineView } from "../desk-api.ts";
 
-interface Message {
-  who: "ai" | "user";
-  text: string;
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-interface AiLink {
-  connected: boolean;
-  model: string;
-  via: string;
-  where: string;
-}
+const STATUS: Record<string, string> = {
+  running: "İşleniyor",
+  done: "Tamam",
+  empty: "Kayıt yok",
+  blocked: "Durdu",
+  dropped: "Bağlantı koptu",
+  failed: "Hata",
+};
 
 export function Desk() {
-  const [busy, setBusy] = useState(false);
+  const [desk, setDesk] = useState<DeskSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [link, setLink] = useState<AiLink | null>(null);
-  const [doc, setDoc] = useState<Evrak | null>(null);
-  const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      who: "ai",
-      text: "DENK AI. Evrakı yükleyin — fişi okurum, değerlendiririm, işlerim.",
-    },
-  ]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/ai")
-      .then((res) => res.json())
-      .then((body: AiLink) => setLink(body))
-      .catch(() => setLink({ connected: false, model: "", via: "disconnected", where: "" }));
-    fetch("/api/evrak")
-      .then((res) => res.json())
-      .then(async (body: { document?: Evrak | null }) => {
-        if (!body.document) return;
-        setDoc(body.document);
-        const reply = await ask("", body.document);
-        setMessages((current) => [...current, { who: "ai", text: reply }]);
-      })
-      .catch(() => undefined);
+    let stop = false;
+    const apply = (next: DeskSnapshot) => {
+      if (stop) return;
+      setDesk(next);
+      setError(null);
+      setSelected((current) => current ?? next.machines[0]?.machineId ?? null);
+    };
+    const pull = () => {
+      loadDesk().then(apply).catch(() => {
+        if (!stop) setError("Merkez kapalı. denk-app bu makinede 8788 portunda açık olmalı.");
+      });
+    };
+    pull();
+    const timer = window.setInterval(pull, 4000);
+    const socket = new WebSocket(deskSocketUrl());
+    socket.addEventListener("message", (event) => {
+      try {
+        apply(JSON.parse(String(event.data)) as DeskSnapshot);
+      } catch {
+        // Ignore a malformed socket frame.
+      }
+    });
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+      socket.close();
+    };
   }, []);
 
-  async function ask(message: string, evrak = doc): Promise<string> {
-    const res = await fetch("/api/ai", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message, document: evrak }),
-    });
-    const body = (await res.json()) as { reply?: string; error?: string };
-    if (!res.ok) throw new Error(body.error ?? "AI cevap veremedi.");
-    return body.reply ?? "";
-  }
+  const machine = desk?.machines.find((row) => row.machineId === selected) ?? desk?.machines[0] ?? null;
 
-  async function sendFile(file: File): Promise<void> {
+  async function run(row: MachineView): Promise<void> {
     setBusy(true);
     setError(null);
-    setMessages((current) => [...current, { who: "user", text: `Evrak yükledim: ${file.name}` }]);
     try {
-      const contentBase64 = await fileToBase64(file);
-      const res = await fetch("/api/evrak", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, mime: file.type, contentBase64 }),
-      });
-      const body = (await res.json()) as { document?: Evrak; error?: string };
-      if (!res.ok || !body.document) throw new Error(body.error ?? "Yüklenemedi.");
-      setDoc(body.document);
-      const reply = await ask("Bu evrakı oku. Fişi değerlendir ve işle.", body.document);
-      setMessages((current) => [...current, { who: "ai", text: reply }]);
+      await runOnMachine(row.machineId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Yüklenemedi.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function sendText(): Promise<void> {
-    const message = draft.trim();
-    if (!message) return;
-    setDraft("");
-    setMessages((current) => [...current, { who: "user", text: message }]);
-    setBusy(true);
-    try {
-      const reply = await ask(message);
-      setMessages((current) => [...current, { who: "ai", text: reply }]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "AI cevap veremedi.");
+      setError(err instanceof Error ? err.message : "İşlem başlatılamadı.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="desk-ai">
-      <section className="sheet">
-        <h2>AI</h2>
+    <div>
+      <p className="lede">{desk?.where ?? "Kurallar bulutta. İşlem bağlanan bilgisayarda."}</p>
+      {desk ? (
         <p className="lede">
-          {link?.connected
-            ? `Bağlı: ${link.model} · ${link.via}`
-            : "Model bağlı değil. denk-app Worker’ını Cloudflare’e yükleyin (env.AI binding)."}
+          Kural {desk.rulesVersion}: {desk.vatDescription} · nakit {desk.cashAccount} · KDV {desk.vatAccount} · gider{" "}
+          {desk.expenseAccount}
         </p>
-        <div className="thread">
-          {messages.map((message, index) => (
-            <div key={index} className={`msg ${message.who === "ai" ? "ai" : "op"}`}>
-              <small>{message.who === "ai" ? "DENK AI" : "Siz"}</small>
-              {message.text}
-            </div>
-          ))}
-        </div>
-        <label className="drop">
-          <input
-            type="file"
-            accept=".xml,.pdf,.xlsx,.xls,.jpg,.jpeg,.png"
-            disabled={busy}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void sendFile(file);
-            }}
-          />
-          <strong>{busy ? "İşleniyor…" : "Evrak yükle"}</strong>
-          <span>Gerçek dosya · XML, PDF, Excel veya görüntü · en fazla 5 MB</span>
-        </label>
-        <label className="block" htmlFor="ai-input">AI’ye yazın</label>
-        <textarea
-          id="ai-input"
-          rows={2}
-          value={draft}
-          disabled={busy}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void sendText();
-            }
-          }}
-        />
-        <div className="row">
-          <button type="button" disabled={busy || !draft.trim()} onClick={() => void sendText()}>
-            Gönder
-          </button>
-          <a className="as-btn ghost" href="#/yazdir">
+      ) : null}
+      <div className="desk">
+        <section className="sheet">
+          <h2>Bağlanan bilgisayarlar</h2>
+          {desk && desk.machines.length === 0 ? (
+            <p className="empty">
+              Henüz bağlanan bilgisayar yok. İşlem yapılacak makinede ajanı açın. Kurallar buradan iner; o makinedeki log,
+              audit ve XML orada işlenir.
+            </p>
+          ) : null}
+          <div className="machines">
+            {desk?.machines.map((row) => (
+              <button
+                key={row.machineId}
+                type="button"
+                className={machine?.machineId === row.machineId ? "machine active" : "machine"}
+                onClick={() => setSelected(row.machineId)}
+              >
+                <span>
+                  <strong>{row.hostname}</strong>
+                  <small>{row.online ? "bağlı" : "bağlı değil"}</small>
+                </span>
+                <em className={row.online ? "pill ok" : "pill"}>{row.lastJob ? STATUS[row.lastJob.status] : "bekliyor"}</em>
+              </button>
+            ))}
+          </div>
+          <p className="lede">O makinede: DENK_LOCAL klasörüyle npm run connect</p>
+        </section>
+        <section className="sheet">
+          <h2>{machine ? machine.hostname : "Fiş"}</h2>
+          {machine ? <MachineResult machine={machine} busy={busy} onRun={() => void run(machine)} /> : <p className="empty">Bilgisayar seçilmedi.</p>}
+          {error ? <p className="lede">{error}</p> : null}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function MachineResult(props: { machine: MachineView; busy: boolean; onRun: () => void }) {
+  const job = props.machine.lastJob;
+  return (
+    <>
+      <p className="lede">{job?.note ?? "Bağlanınca bu bilgisayar kendi klasörünü işler."}</p>
+      <div className="row">
+        <button type="button" disabled={props.busy || !props.machine.online} onClick={props.onRun}>
+          {props.busy || job?.status === "running" ? "Bu bilgisayarda işleniyor…" : "Bu bilgisayarda işle"}
+        </button>
+        {job && job.vouchers.length > 0 ? (
+          <a
+            className="as-btn ghost"
+            href="#/yazdir"
+            onClick={() => sessionStorage.setItem(PRINT_MACHINE_KEY, props.machine.machineId)}
+          >
             Fişi yazdır
           </a>
-        </div>
-        {error ? <p className="lede">{error}</p> : null}
-        {doc ? (
-          <p className="lede">
-            Son evrak: {doc.fileName}
-            {doc.invoiceNo ? ` · ${doc.invoiceNo}` : ""}
-            {doc.payableText ? ` · ${doc.payableText}` : ""}
-          </p>
         ) : null}
-      </section>
-    </div>
+      </div>
+      {job?.vouchers.map((voucher) => (
+        <article key={`${voucher.sourceName}-${voucher.invoiceNo}`} className="voucher">
+          <h3>
+            {voucher.invoiceNo || voucher.sourceName} · {voucher.sourceKind}
+          </h3>
+          <p className="lede">
+            {voucher.supplierName || "Unvan yok"} · {voucher.date} · kaynak {voucher.sourceName}
+          </p>
+          <table className="ledger">
+            <thead>
+              <tr>
+                <th>Sıra</th>
+                <th>Hesap</th>
+                <th>B/A</th>
+                <th>Tutar</th>
+                <th>Açıklama</th>
+              </tr>
+            </thead>
+            <tbody>
+              {voucher.lines.map((line) => (
+                <tr key={line.seq} className={line.description === "İND.KDV." ? "vat" : undefined}>
+                  <td>{line.seq}</td>
+                  <td>{line.account}</td>
+                  <td>{line.side}</td>
+                  <td className="num">{line.amountText}</td>
+                  <td>{line.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {voucher.blockers.length > 0 ? <p className="lede">{voucher.blockers.join(" ")}</p> : null}
+        </article>
+      ))}
+      {job?.modelNote ? (
+        <p className="preview">
+          Bu bilgisayardaki model: {job.modelNote}
+        </p>
+      ) : (
+        <p className="lede">Tutarları kural motoru kurar. Model varsa yalnız bu bilgisayarda değerlendirme yazar.</p>
+      )}
+    </>
   );
 }

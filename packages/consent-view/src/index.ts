@@ -16,6 +16,28 @@ export {
 } from "./ai.ts";
 export { defaultXaiEnvPath, parseXaiEnv, sortGrokNewest, WINDOWS_XAI_ENV } from "./xai-env.ts";
 export { ConsentHub } from "./hub.ts";
+export {
+  DESK_WHERE,
+  assertMachineId,
+  emptyDesk,
+  machineViews,
+  onDisconnect,
+  onHello,
+  onResult,
+  onRun,
+  publicSnapshot,
+  type AgentHello,
+  type AgentResultMessage,
+  type DeskLine,
+  type DeskSnapshot,
+  type DeskState,
+  type DeskVoucher,
+  type HubToAgent,
+  type JobRecord,
+  type JobStatus,
+  type MachineView,
+  type OnlineMachine,
+} from "./desk.ts";
 export { filterRecords, isViewField, sanitizeFields } from "./filter.ts";
 export { attestWindowsIdentity, demoWindowsIdentity } from "./windows.ts";
 export { documentFromFile, parseUblInvoice, type UploadedDocument } from "./ubl.ts";

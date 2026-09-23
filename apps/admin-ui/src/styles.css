@@ -101,6 +101,31 @@ body {
 
 .desk-ai { max-width: 720px; }
 .desk-ai .thread { max-height: 42vh; overflow: auto; }
+.machines { display: flex; flex-direction: column; gap: 0.45rem; margin: 0.8rem 0 1rem; }
+button.machine {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+button.machine.active { border-color: var(--pine); background: #f7f2e8; }
+button.machine strong { display: block; }
+button.machine small { display: block; color: var(--mute); font-weight: 400; }
+button.machine em { font-style: normal; }
+.voucher { margin-top: 1rem; }
+.voucher h3 { margin: 0 0 0.3rem; font-size: 1rem; }
+.preview {
+  white-space: pre-wrap;
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+  background: #f6f0e6;
+  padding: 0.7rem;
+}
 .desk {
   display: grid;
   grid-template-columns: minmax(280px, 360px) 1fr;

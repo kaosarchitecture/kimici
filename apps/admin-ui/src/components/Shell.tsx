@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type PageId = "ai" | "yazdir";
 
 const LINKS: { id: PageId; href: string; label: string }[] = [
-  { id: "ai", href: "#/", label: "AI" },
+  { id: "ai", href: "#/", label: "Bilgisayarlar" },
   { id: "yazdir", href: "#/yazdir", label: "Fiş yazdır" },
 ];
 
@@ -22,16 +22,16 @@ export function Shell(props: { page: PageId; children: ReactNode }) {
             </a>
           ))}
         </nav>
-        <p className="rail-note">Evrak buraya yüklenir. AI fişi okur, değerlendirir, işler.</p>
+        <p className="rail-note">Kurallar bu sunucuda. İşlem, bağlanan bilgisayarda.</p>
       </aside>
       <main className="stage">
         <header className="top">
           <div>
-            <h1>{props.page === "ai" ? "AI" : "Fiş yazdır"}</h1>
+            <h1>{props.page === "ai" ? "Bilgisayarlar" : "Fiş yazdır"}</h1>
             <p className="lede">
               {props.page === "ai"
-                ? "Model: Grok 4.5, denk-app Worker içinden. Evrak bu sunucuya yüklenir."
-                : "Yalnızca yüklenen evraktan fiş çıkar."}
+                ? "Kim bağlanırsa fiş onun bilgisayarında kurulur."
+                : "Fiş, bağlanan bilgisayarın kendi kaydından gelir."}
             </p>
           </div>
         </header>
