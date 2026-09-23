@@ -10,7 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "connect": "node --experimental-strip-types src/cli.ts",
-    "bundle": "../admin-ui/node_modules/esbuild/bin/esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=../admin-ui/public/denk-baglan/agent.mjs"
+    "bundle": "../admin-ui/node_modules/esbuild/bin/esbuild src/cli.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=../admin-ui/public/denk-baglan/agent.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
