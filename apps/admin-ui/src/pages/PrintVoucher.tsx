@@ -38,7 +38,7 @@ export function PrintVoucher() {
     <div className="print-wrap">
       <div className="print-bar no-print">
         <p>
-          {machine.hostname} üzerinde kurulan fiş. Kaynak dosya bu sunucuya gelmedi.
+          {machine.machineId} üzerinde kurulan fiş. Kaynak dosya bu sunucuya gelmedi.
         </p>
         <div className="row" style={{ marginTop: 0 }}>
           <a className="as-btn ghost" href="#/">
@@ -50,7 +50,7 @@ export function PrintVoucher() {
         </div>
       </div>
       {vouchers.map((voucher) => (
-        <Slip key={`${voucher.sourceName}-${voucher.invoiceNo}`} voucher={voucher} hostname={machine.hostname} />
+        <Slip key={`${voucher.sourceName}-${voucher.invoiceNo}`} voucher={voucher} hostname={machine.machineId} />
       ))}
     </div>
   );

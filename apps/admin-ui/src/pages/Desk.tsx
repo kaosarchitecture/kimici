@@ -87,8 +87,8 @@ export function Desk() {
                 onClick={() => setSelected(row.machineId)}
               >
                 <span>
-                  <strong>{row.hostname}</strong>
-                  <small>{row.online ? "bağlı" : "bağlı değil"}</small>
+                  <strong>{row.machineId}</strong>
+                  <small>{row.online ? "bağlı" : "bağlı değil"}{row.hostname !== row.machineId ? ` · ${row.hostname}` : ""}</small>
                 </span>
                 <em className={row.online ? "pill ok" : "pill"}>{row.lastJob ? STATUS[row.lastJob.status] : "bekliyor"}</em>
               </button>
@@ -97,7 +97,7 @@ export function Desk() {
           <p className="lede">O makinede: DENK_LOCAL klasörüyle npm run connect</p>
         </section>
         <section className="sheet">
-          <h2>{machine ? machine.hostname : "Fiş"}</h2>
+          <h2>{machine ? machine.machineId : "Fiş"}</h2>
           {machine ? <MachineResult machine={machine} busy={busy} onRun={() => void run(machine)} /> : <p className="empty">Bilgisayar seçilmedi.</p>}
           {error ? <p className="lede">{error}</p> : null}
         </section>
