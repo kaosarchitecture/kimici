@@ -30,7 +30,7 @@ export function PrintVoucher() {
   return (
     <div className="print-wrap">
       <div className="print-bar no-print">
-        <p>Bu fiş yüklenen evraktan üretildi. ETA SQL’ine bağlanılmaz.</p>
+        <p>Bu fiş yüklenen evraktan üretildi.</p>
         <div className="row" style={{ marginTop: 0 }}>
           <a className="as-btn ghost" href="#/">
             AI

@@ -11,11 +11,11 @@ import {
 import { documentFromFile } from "../src/ubl.ts";
 
 describe("Grok prompt", () => {
-  it("keeps the model off SQL", () => {
+  it("asks the model to evaluate vouchers", () => {
     expect(DEFAULT_XAI_MODEL).toBe("grok-4.20-0309-reasoning");
     expect(cfGrokId("grok-4.6")).toBe("xai/grok-4.6");
-    expect(SYSTEM_PROMPT).toContain("Grok");
-    expect(SYSTEM_PROMPT).toContain("SQL yazma");
+    expect(SYSTEM_PROMPT).toContain("fiş");
+    expect(SYSTEM_PROMPT.toLocaleLowerCase("tr-TR")).not.toContain("sql");
     expect(SYSTEM_PROMPT).toContain("İND.KDV.");
     expect(SYSTEM_PROMPT).toContain("100 01");
   });
@@ -23,8 +23,12 @@ describe("Grok prompt", () => {
   it("sends uploaded fields, not invented books", () => {
     const xml = `<?xml version="1.0"?><Invoice><cbc:ID>A-1</cbc:ID><cbc:IssueDate>2026-01-02</cbc:IssueDate><cbc:Name>ABC</cbc:Name><cbc:TaxExclusiveAmount>10</cbc:TaxExclusiveAmount><cbc:TaxAmount>2</cbc:TaxAmount><cbc:PayableAmount>12</cbc:PayableAmount></Invoice>`;
     const doc = documentFromFile("a.xml", "application/xml", xml.length, xml);
-    expect(documentContext(doc)).toContain("A-1");
-    const messages = buildChatMessages("özet", doc);
+    const ctx = documentContext(doc);
+    expect(ctx).toContain("A-1");
+    expect(ctx).toContain("İND.KDV.");
+    expect(ctx).toContain("Kurulan fiş");
+    const messages = buildChatMessages("Bu evrakı oku. Fişi değerlendir ve işle.", doc);
+    expect(messages[1]?.content).toContain("değerlendir");
     expect(xaiChatBody(messages, "grok-4.6").model).toBe("grok-4.6");
   });
 

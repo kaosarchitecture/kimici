@@ -30,7 +30,7 @@ export function Desk() {
   const [messages, setMessages] = useState<Message[]>([
     {
       who: "ai",
-      text: "DENK AI (Grok). Konuşma denk-app’den xAI’ye gider; model xai.env içinden seçilir. Evrakı yükleyin. SQL yazmam; müşteri makinesine bağlanmam.",
+      text: "DENK AI. Evrakı yükleyin — fişi okurum, değerlendiririm, işlerim.",
     },
   ]);
 
@@ -75,7 +75,7 @@ export function Desk() {
       const body = (await res.json()) as { document?: Evrak; error?: string };
       if (!res.ok || !body.document) throw new Error(body.error ?? "Yüklenemedi.");
       setDoc(body.document);
-      const reply = await ask("özet", body.document);
+      const reply = await ask("Bu evrakı oku. Fişi değerlendir ve işle.", body.document);
       setMessages((current) => [...current, { who: "ai", text: reply }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Yüklenemedi.");

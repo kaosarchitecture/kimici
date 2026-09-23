@@ -17,18 +17,18 @@ export const XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions";
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export const SYSTEM_PROMPT = [
-  "Sen DENK AI’sın (Grok). Bu sohbet bizim denk-app Worker’ımızda çalışır.",
-  "Kullanıcı evrakı bizim sunucuya yükler; sen o evrakın çıkarılan alanlarını görürsün.",
-  "Müşteri makinesine bağlanma. ETA SQL’ine bağlanma. SQL yazma. Parola isteme.",
-  "Tutar uydurma: evrakta yoksa yok de. Hesaplama yapma, evraktaki rakamı kullan.",
-  "Kanonik yazımlar: KDV satırı İND.KDV. (noktasız, boşluksuz). Nakit eşleşmezse 100 01.",
-  "Alış faturası önerisi: 770 borç (gider), 191 02 20 İND.KDV. borç, 320 alacak (N.FT İLE ALIŞ).",
-  "Kısa Türkçe cevap ver. Fiş yazdırmak için kullanıcıyı yazdır sayfasına yönlendir.",
+  "Sen DENK AI’sın. İşin evrak ve muhasebe fişi: oku, değerlendir, satırları kur, işle.",
+  "Yüklenen evrakın çıkarılan alanlarını ve kurulan fiş satırlarını görürsün.",
+  "Tutarı evraktan al; yoksa yok de, uydurma.",
+  "Kanonik yazım: KDV açıklaması İND.KDV. (noktasız, boşluksuz). Nakit kapanış 100 01.",
+  "Alış faturası: 770 borç (gider), 191 02 20 İND.KDV. borç, 320 alacak (N.FT İLE ALIŞ).",
+  "Cevabında fişi değerlendir: hesap, B/A, tutar, açıklama, eksik veya tutarsız satır.",
+  "Türkçe, somut, fiş dili. İşini yap.",
 ].join(" ");
 
 export function documentContext(doc: UploadedDocument | null): string {
-  if (!doc) return "Yüklü evrak yok.";
-  const lines = [
+  if (!doc) return "Yüklü evrak yok. Kullanıcı evrak yükleyince fişi oku ve işle.";
+  const header = [
     `dosya=${doc.fileName}`,
     `tür=${doc.kind}`,
     `evrakNo=${doc.invoiceNo || "yok"}`,
@@ -38,11 +38,16 @@ export function documentContext(doc: UploadedDocument | null): string {
     `kdv=${doc.vatText || "yok"}`,
     `ödenecek=${doc.payableText || "yok"}`,
   ];
-  return `Yüklü evrak: ${lines.join("; ")}`;
+  const fis: string[] = [];
+  if (doc.netText) fis.push(`1 B 770 01 ${doc.netText} ${doc.supplierName || doc.fileName}`);
+  if (doc.vatText) fis.push(`2 B 191 02 20 ${doc.vatText} İND.KDV.`);
+  if (doc.payableText) fis.push(`3 A 320 ${doc.payableText} N.FT İLE ALIŞ`);
+  const body = `Yüklü evrak: ${header.join("; ")}`;
+  return fis.length ? `${body}\nKurulan fiş:\n${fis.join("\n")}` : body;
 }
 
 export function buildChatMessages(userText: string, doc: UploadedDocument | null): ChatMessage[] {
-  const asked = userText.trim() || "Yüklenen evrakı oku ve fiş öner.";
+  const asked = userText.trim() || "Bu evrakı oku. Fişi değerlendir ve işle.";
   return [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: `${documentContext(doc)}\n\nKullanıcı: ${asked}` },

@@ -22,7 +22,7 @@ export function Shell(props: { page: PageId; children: ReactNode }) {
             </a>
           ))}
         </nav>
-        <p className="rail-note">Evrak buraya yüklenir. AI okur, fiş önerir, yazdırır. SQL yazmaz.</p>
+        <p className="rail-note">Evrak buraya yüklenir. AI fişi okur, değerlendirir, işler.</p>
       </aside>
       <main className="stage">
         <header className="top">
