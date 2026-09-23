@@ -15,23 +15,26 @@ flowchart LR
 DENK ofis arşivinden tablo adları, kolonlar, CP1254, REF/`MA-` üretimi ve onaylı iki işlem
 doğrulandı (`docs/denk-analysis.md`). `packages/eta-core` bu kanıta göre yazıldı.
 
-Kalan keşif (hedef makinede, yalnız okuma):
+Kalan keşif (arşiv + kullanıcının kendi makinesinde, isterse, doğruladığı şeyler;
+DENK bir ofis SQL'ine bağlanmaz):
 
-- Banka altın örneğinin canlı fiş gruplaması (script ile log çelişiyor).
+- Banka altın örneğinin fiş gruplaması (script ile log çelişiyor).
 - `MUHMIZDEGER` döviz / `MUHRAKTIP` çeşitleri.
-- `volume.md` okuma hızı ve disk tahminlerinin ölçümü.
-- ETA/bayi yazılı teyidi (doğrudan SQL yazımı).
+- `volume.md` disk ve hız tahminleri (kullanıcı kendi makinesinde ölçerse).
+- ETA/bayi yazılı teyidi (doğrudan SQL yazımı; kullanıcı bu yolu açarsa).
 
 ## Faz 1: Salt okunur ajan ve merkez iskeleti
 
 - Merkez: API Worker, TenantHub Durable Object, D1 migration'ları (staging), ajan kaydı,
   Türkçe yönetim paneli iskeleti.
-- Ajan: Windows servisi, enrollment, WSS bağlantısı, şema keşfi, geçmiş yükleyici,
-  artımlı okuyucu, gizlilik filtresi, telemetri.
+- Ajan: Windows servisi, enrollment, **bizim sunucuya** WSS, gizlilik filtresi, telemetri.
+  Yerel ETA (şema keşfi / geçmiş / artımlı okuma) yalnız kullanıcı kendi makinesinde
+  açarsa.
 - `packages/protocol` şemaları.
 
-Kabul ölçütü: ajan bir ETA kopyasını okur, merkeze yalnız sayaç gönderir. Gizlilik
-filtresi testleri yasaklı alanların hiçbirinin çıkmadığını kanıtlar.
+Kabul ölçütü: herhangi bir makinedeki ajan merkeze bağlanır, yalnız sayaç gönderir.
+Gizlilik filtresi testleri yasaklı alanların hiçbirinin çıkmadığını kanıtlar. Yerel ETA
+zorunlu değildir.
 
 ## Faz 2: Öğrenme ve gölge mod
 
@@ -63,8 +66,10 @@ düzeltmeler kural güvenini düşürür.
 1. Merkez nerede çalışacak: Cloudflare (önerilen) veya sizin bilgisayarınız + Cloudflare Tunnel.
 2. Desteklenecek ETA sürümleri: ETA:SQL, V.8-SQL, V.11-SQL, hepsi mi?
 3. ETA'ya yazma yolu: ofis pratiği doğrudan SQL; ETA/bayi teyidi hâlâ gerekli.
-4. Ajanın kurulacağı yer: ETA istemci bilgisayarı mı, SQL Server makinesi mi?
+4. Ajan herhangi bir makinede çalışır; bağlanan taraf her zaman ajan → bizim sunucu.
+   Yerel ETA yalnız kullanıcı isterse. (Karar: bu model.)
 5. Operatör kimlik doğrulaması: Cloudflare Access mi, ayrı IdP mi?
-6. Faz 0 kalan keşif için salt okunur ETA erişimi (banka fiş gruplaması + mizan tipleri).
+6. Banka fiş gruplaması ve mizan tipleri: kullanıcı kendi makinesinde doğrulamak isterse
+   bakar. DENK için SQL kullanıcısı açılmaz; ofis hesabı istenmez.
 7. Ajan çalışma zamanı: Node.js (önerilen, `eta-core` ile aynı) mı, .NET mi?
-8. Yapay zeka nerede çalışacak: bulut model mi, ofis makinesinde yerel model mi?
+8. Yapay zeka nerede çalışacak: bulut model mi, kullanıcının kendi makinesinde yerel model mi?

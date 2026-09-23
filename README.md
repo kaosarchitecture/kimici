@@ -19,8 +19,9 @@ cd packages/eta-core && npm install && npm test
 - **Hazır repo yok.** Bu kombinasyonu yapan olgun bir açık kaynak proje bulunamadı.
 - **Yöntem:** Yapay zeka SQL yazmaz. Plan önerir; yazmayı yalnız `eta-core` yapar.
   Ayrıntı: [docs/method.md](docs/method.md).
-- **Mimari:** İnce merkez (Cloudflare Workers + Durable Objects + D1 + R2) ve ofis
-  makinesinde çalışan saha ajanı. Öğrenme ve ETA yazımı sahada. Merkeze yalnız sayaç gider.
+- **Mimari:** İnce merkez (Cloudflare Workers + Durable Objects + D1 + R2) ve kullanıcının
+  kendi makinesindeki saha ajanı. Ajan **bizim sunucuya** bağlanır; biz makineye gitmeyiz.
+  Öğrenme ve (kullanıcı açarsa) yerel ETA yazımı sahada. Merkeze yalnız sayaç gider.
 - **Ajan çalışma zamanı (öneri):** Node.js / TypeScript. DENKWEB ve `eta-core` ile aynı
   dil. Karar onayınıza bağlı.
 

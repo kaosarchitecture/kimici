@@ -8,10 +8,10 @@ Sistem iki parçadan oluşur:
   kiracı (müşteri) yönetimi, ajan kaydı, kural paketlerinin imzalanması ve dağıtımı burada
   yapılır. Merkez **müşterinin muhasebe verisini hiçbir zaman almaz**: tutar, cari adı,
   VKN/TCKN, açıklama metni veya fiş içeriği merkeze gelmez.
-- **Saha Ajanı (Edge Agent)**: Müşterinin ETA kurulu bilgisayarında (veya ETA SQL Server
-  makinesinde) çalışan Windows servisi. ETA veritabanını okur, geçmiş log ve audit
-  kayıtlarından yerel olarak öğrenir, merkezden gelen kuralları yerel hesap planına eşler,
-  fiş önerisi üretir ve onaydan sonra ETA'ya yazar.
+- **Saha Ajanı (Edge Agent)**: Kullanıcının **kendi** kurduğu program. Herhangi bir
+  makineden **bizim sunucuya** WSS ile bağlanır. Yerel ETA isteğe bağlıdır: kullanıcı
+  kendi makinesinde kendi bağlantısını yazarsa ajan o makinedeki ETA ile konuşur. DENK
+  bir ofis makinesine, SQL sunucusuna veya masaüstüne gitmez; ofis hesabı istemez.
 
 Merkeze giden tek şey **içeriksiz telemetri**dir: ajan sağlığı, sayaçlar (kaç öneri, kaç
 onay, kaç ret), kural kimliği bazında isabet oranı, hata kodları. Bu alanlar ajan tarafında
@@ -48,8 +48,7 @@ flowchart LR
     AG -- "paket indir (API üzerinden)<br/>+ imza doğrula" --> API
     API -.-> PKG
     AG <--> LS
-    AG <-- "okuma (read-only kullanıcı)" --> ETA
-    AG -- "yazma (onaydan sonra,<br/>ayrı yetkili kullanıcı)" --> ETA
+    AG <-- "yalnız kullanıcı isterse,<br/>kendi makinesindeki yerel ETA" --> ETA
     LUI <--> AG
 
     classDef boundary stroke:#c00,stroke-width:2px,stroke-dasharray:6 4;
@@ -147,9 +146,9 @@ flowchart TB
 
 | Bileşen | Görev |
 |---|---|
-| Şema Keşfi | ETA sürümünü, şirket veritabanlarını, fiş/log/audit tablolarını ve kolonlarını `sys.tables` / `sys.columns` üzerinden bulur. Sonucu sürümlü bir "ETA şema haritası" olarak yerelde saklar. Tablo adları koda gömülmez |
-| Geçmiş Yükleyici | Seçilen yıllara ait fiş, satır, log ve audit kayıtlarını mesai dışında, küçük parçalar halinde ve düşük öncelikli sorgularla okur |
-| Artımlı Okuyucu | Son okunan kimlik ve zaman damgasına (watermark) göre 60 saniyede bir yeni ve değişen kayıtları okur. SQL Server Change Tracking müşteri veritabanında şema değişikliği gerektirdiği için varsayılan olarak **kullanılmaz** |
+| Şema Keşfi | Yalnız kullanıcı kendi makinesinde yerel ETA'yı açtıysa: sürüm, şirket veritabanı ve tablo/kolon haritasını yerelde saklar. Tablo adları koda gömülmez. Kullanıcı açmazsa bu adım yoktur |
+| Geçmiş Yükleyici | Aynı koşulla: seçilen yıllara ait fiş, satır, log ve audit kayıtlarını mesai dışında, küçük parçalar halinde okur |
+| Artımlı Okuyucu | Aynı koşulla: son okunan kimlik ve zaman damgasına (watermark) göre yeni kayıtları okur. SQL Server Change Tracking varsayılan olarak **kullanılmaz** |
 | Özellik Çıkarıcı | Fiş tipi, cari grup kodu, hesap kodu önekleri, açıklama kelimeleri, KDV oranı, tutar aralığı, ayın günü, kullanıcı gibi özellikleri üretir |
 | Fiş Şablonu İmzası | Bir fişi tutardan bağımsız bir kalıba indirger. Örnek: `{770.*:B, 191.*:B, 320.*:A}` ve oranlar `{1.0, 0.2, 1.2}` |
 | Kural Madenciliği | Bağlam özelliklerinden şablonu tahmin eden karar ağacı eğitir. Ağaç yollarını insan okunur aday kurallara çevirir; her kuralın desteği (kaç fiş) ve güveni (yüzde kaç doğru) hesaplanır |
@@ -231,13 +230,13 @@ sequenceDiagram
     ADM->>API: POST /tenants/{id}/enrollment-codes
     API-->>ADM: tek kullanımlık kod (15 dk geçerli)
     OP-->>MU: kod + yükleyici (güvenli kanal)
-    MU->>AG: Yükle, kodu gir, ETA SQL bağlantısını tanımla
+    MU->>AG: Yükle, kodu gir (herhangi bir makine)
     AG->>AG: Cihaz anahtar çifti üret (DPAPI ile korunur)
     AG->>API: POST /agents/enroll {kod, publicKey, ajan sürümü}
     API-->>AG: agentId + kısa ömürlü erişim belirteci
-    AG->>HUB: WSS bağlan (belirteç)
+    AG->>HUB: WSS bağlan (belirteç) — yön: ajan → bizim sunucu
     HUB-->>AG: hoş geldin + atanmış kural kanalı
-    AG->>AG: Şema keşfi başlar (yalnız okuma)
+    Note over MU,AG: Yerel ETA isteğe bağlı. Kullanıcı kendi makinesinde tanımlamazsa ajan yalnız merkeze bağlı kalır.
 ```
 
 ### 4.2 Kural yayınlama ve sahaya uygulama
@@ -277,9 +276,11 @@ sequenceDiagram
     actor KU as Müşteri Kullanıcısı
     participant AUD as Denetim İzi
 
-    loop her 60 sn
-        AG->>ETA: SELECT ... WHERE id > watermark
-        ETA-->>AG: yeni fatura / cari hareket / log
+    opt Kullanıcı kendi makinesinde yerel ETA'yı açtıysa
+        loop her 60 sn
+            AG->>ETA: SELECT ... WHERE id > watermark
+            ETA-->>AG: yeni fatura / cari hareket / log
+        end
     end
     AG->>ENG: özellikler
     ENG-->>AG: fiş şablonu + kural kimliği + güven
@@ -291,15 +292,18 @@ sequenceDiagram
         AG->>KU: Yerel arayüzde öneri
         KU-->>AG: Onayla / Düzelt / Reddet
     end
-    AG->>ETA: BEGIN TRAN · fiş yaz · doğrula · COMMIT
+    opt Kullanıcı kendi makinesinde yerel yazmayı açtıysa
+        AG->>ETA: BEGIN TRAN · fiş yaz · doğrula · COMMIT
+    end
     AG->>AUD: kayıt (öneri, karar, sonuç, önceki hash)
-    Note over AG,ETA: Sonraki okumalarda ETA'da düzeltme veya iptal<br/>görülürse bu olay geri bildirim olur
+    Note over AG,KU: Yerel ETA yoksa ajan yalnız plan ve telemetri üretir; bir ofis SQL'ine gitmez
 ```
 
 ## 5. ETA'ya yazma stratejileri
 
-Faz 0'da hedef makinede denenip bir tanesi seçilecek. Kod, üçünü de aynı arayüz
-arkasında tutacak şekilde tasarlanır.
+Üç yol teorik olarak aynı arayüzün arkasında durur. Hangisinin kullanılacağı, kullanıcı
+kendi makinesinde yerel yazmayı açarsa ve o makinede neyin çalıştığı görülürse karar
+verilir. DENK bir ofis SQL makinesi seçmez ve oraya bağlanmaz.
 
 | Strateji | Artı | Eksi / risk |
 |---|---|---|
@@ -307,11 +311,10 @@ arkasında tutacak şekilde tasarlanır.
 | B. Doğrudan SQL (transaction içinde) | Hızlı, tam kontrol | Fiş numarası, bakiye ve entegrasyon tablolarının tutarlılığı bizim sorumluluğumuzda; ETA güncellemesinde kırılabilir; lisans ve destek şartlarına uygunluğu **doğrulanmadı** |
 | C. UI otomasyonu | ETA'nın iş kurallarını birebir kullanır | Yavaş, kırılgan, oturum açık kullanıcı gerekir |
 
-DENK ofis arşivindeki onaylı işlemler strateji B'yi kullanıyor (şablon klon + tek
-transaction + mizan rebuild). Lisans teyidi hâlâ açık. B seçilirse zorunlu korumalar:
-ayrı ve en az yetkili SQL kullanıcısı, yazmadan önce yedek kontrolü, tek transaction,
-yazma sonrası borç/alacak ve hex denetimi, REF bazlı geri alma. Yapay zeka SQL yazmaz;
-satırları `packages/eta-core` üretir.
+Arşivdeki onaylı işlemler strateji B'nin **mantığını** gösterir (şablon klon + tek
+transaction + mizan rebuild). DENK bir ofis sunucusuna bağlanarak bunu yapmaz. Kullanıcı
+kendi makinesinde yazmayı açarsa çekirdek aynı mantığı yerelde uygular: yedek kontrolü,
+tek transaction, borç/alacak ve hex denetimi, REF bazlı geri alma. Yapay zeka SQL yazmaz.
 
 ## 6. Önerilen depo iskeleti (monorepo)
 

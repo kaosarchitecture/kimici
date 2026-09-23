@@ -143,9 +143,10 @@ Kiracı başına DO depolama tahmini: günde 96 × 1,5 ajan telemetri satırı (
 | D1 sorgu süresi | 30 sn | kısa, indeksli sorgular | rahat |
 | D1 eşzamanlılık | tek iş parçacığı | ~0,1 yazma / sn | rahat |
 
-Sonuç: Hiçbir senaryoda merkez darboğaz olmuyor. Asıl kapasite riski sahadadır: büyük
-bürolarda disk, geçmiş yükleme süresi ve ETA SQL Server'ın okuma yükü. Bu üçü Faz 0'da
-gerçek veriyle ölçülecek.
+Sonuç: Hiçbir senaryoda merkez darboğaz olmuyor. Asıl kapasite riski sahadadır: ajanın
+çalıştığı makinede disk ve (kullanıcı yerel ETA'yı açtıysa) o makinedeki okuma yükü.
+Bu üçü, bir kullanıcı kendi makinesinde ölçerse netleşir. DENK bir ofis SQL'ine bağlanıp
+ölçmez.
 
 ## 4. Veri akış sınıfları ve nerede tutuldukları
 

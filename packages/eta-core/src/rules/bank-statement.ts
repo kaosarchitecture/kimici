@@ -83,7 +83,7 @@ export function classifyBankRow(
       return { account: cari.code, ruleId: "R15.cari.name", label: cari.name };
     }
   }
-  const unmatched = options.unmatchedAccount ?? "100 01";
+  const unmatched = options.unmatchedAccount ?? "100 01"; // canonical cash / unmatched account spelling
   if (rootAccount(unmatched) === "296") {
     throw new Error("Eşleşmeyen banka satırı için 296 kullanılamaz (Kural 02/15).");
   }

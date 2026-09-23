@@ -56,7 +56,7 @@ etmiş. Script, log ve audit raporu **birbiriyle tutarlı**.
 |---:|---|:---:|---:|---|---|
 | 1 | `770 13` | B | 35.496,38 | tedarikçi adı | `INDKDV` |
 | 2 | `689 01` | B | 18.255,28 | tedarikçi adı | `INDKDV` |
-| 3 | `191 02 20` | B | 7.099,28 | `İND. KDV` | `INDKDV` |
+| 3 | `191 02 20` | B | 7.099,28 | `İND.KDV.` | `INDKDV` |
 | 4 | `320 …` | A | 60.850,94 | `N.FT İLE ALIŞ` | |
 | 5 | `950 01` | B | 18.255,28 | `K.K.E.GİDERLER` | |
 | 6 | `951 01` | A | 18.255,28 | `K.K.E.GİDERLER` | |
@@ -81,9 +81,8 @@ grup için **ayrı** bir DEK fişi açıyor ve fiş tarihini işlem günü yapı
 satırı için iki fiş satırı yazıyor. Log ise "1.100 Excel satırı → 1.100 MUHHAR satırı"
 diyor. Bu ikisi aynı anda doğru olamaz.
 
-Sonuç: Banka altın örneği **canlı veritabanından doğrulanmadan** referans alınmamalı.
-Doğrulama sorgusu (salt okunur): Şirket B veritabanında ilgili üç REF için `MUHFIS`
-başlıkları ve `MUHHAR` satır sayıları.
+Sonuç: Banka altın örneği, kullanıcının kendi makinesinde kendi isteğiyle doğrulanmadan
+referans alınmamalı. DENK bir ofis SQL sunucusuna bağlanmaz.
 
 ## 4. Çelişkiler ve önerilen çözüm
 
@@ -95,13 +94,13 @@ alır.
 | Ç1 | Bankada eşleşmeyen satır | `100 01` (kural 02, 14, 15 ve banka scripti) | `331 01` ortaklar cari (yapay zeka kılavuzundaki JS) | `100 01`. `331 01` yalnızca şirkete özel eşleme kuralıyla |
 | Ç2 | Sıradaki REF | `max(MUHFIS, MUHFISIPTAL) + 1` (kural 02) | `max(MUHFIS, MUHHAR) + 1` (fatura scripti), `max(MUHFIS) + 1` (kural 19) | Üçünün en büyüğü + 1 |
 | Ç3 | Sıradaki fiş no | en büyük sayı, canlı + iptal (banka scripti) | son REF'teki numara + 1 (fatura scripti) | Canlı ve iptalde en büyük `MA-` sayısı + 1 |
-| Ç4 | KDV satır açıklaması | `İND. KDV` (onaylanan fatura) | `İND.KDV.` (kural 13, 16) | Onaylanan: `İND. KDV`. Şirket geçmişinde hangisi kullanılıyorsa o |
+| Ç4 | KDV satır açıklaması | Arşivde iki yazım vardı | Kullanıcı kararı: **`İND.KDV.`** | Çekirdekte `İND.KDV.` |
 | Ç5 | Türkçe karakter yazımı | `NVarChar` parametre (kural 01) | CP1254 bayt + `CAST(... AS varchar)` (kural 19, onaylanan) | CP1254 bayt, yazım sonrası hex kontrolü |
 | Ç6 | KKEG oranı | Binek bakım: matrah %70 gider, KDV %70, genel toplam %30 KKEG (kural 19) | Akaryakıt: ~%34 KKEG / %66 kabul, KDV yalnız kabul kısmından (kural 16) | İki ayrı kural. Akaryakıt oranının kesin tanımı sizden gelmeli |
 | Ç7 | Tevkifat satırları | `151` + `191 02 xx` + `192 01` + `360 09` (kural 13) | `153 08` + `191 02 20` + `360 07`, `192` yok (kural 16) | Şirket geçmişinden öğrenilmeli; kesin kalıp onayı gerekli |
 | Ç8 | Banka fiş gruplaması | Ayda tek fiş, başlık ayın son günü (kural 18, onaylanan log) | Önceki ay stili "çok sayıda küçük DEK" (kural 14, aynı şirket) ve arşivdeki script | Şirket bazında geçmişten öğrenilir, ön kontrolde (preflight) kullanıcıya gösterilir |
 | Ç9 | Başlık kontrol/onay kodu | `MUHFISKONTKOD = '01'`, `MUHFISONAYKOD = '01'` zorunlu (kural 08, 19) | Banka scriptinde boş yazılmış | Sabit kodlanmaz. Şirketin aynı fiş tipindeki son fişlerinden şablon alınır |
-| Ç10 | Mizan yeniden hesaplama | Scriptler ayın **tüm** `MUHMIZDEGER` satırlarını siliyor | Yalnızca `MUHRAKTIP = 1`, döviz boş satırlarını geri yazıyor | Otomasyona almadan önce canlı veritabanında başka `MUHRAKTIP` / döviz satırı var mı bakılmalı; varsa veri kaybı riski |
+| Ç10 | Mizan yeniden hesaplama | Scriptler ayın **tüm** `MUHMIZDEGER` satırlarını siliyor | Yalnızca `MUHRAKTIP = 1`, döviz boş satırlarını geri yazıyor | Kullanıcı kendi makinesinde bakarsa: başka `MUHRAKTIP` / döviz satırı varsa sil-yaz riski. DENK bunu uzaktan sorgulamaz |
 
 ## 5. Önceki başarısızlıkların ortak nedeni
 
@@ -114,12 +113,13 @@ sonrası denetim ve kullanıcı onayı var.
 Bu yüzden rafine yöntemin ilkesi şudur: **Yapay zeka SQL yazmaz, plan önerir. Yazmayı
 yalnızca test edilmiş deterministik çekirdek yapar.** Ayrıntı: `docs/method.md`.
 
-## 6. Güvenlik bulguları (acil)
+## 6. Bağlantı modeli (DENK kime bağlanır)
 
-| Bulgu | Risk | Öneri |
-|---|---|---|
-| Ortak ETA uygulama kullanıcısının parolası ~10 script dosyasında düz metin, Drive arşivlerinde | Arşive erişen herkes tüm şirket veritabanlarına erişir | Scriptlerden parolayı çıkarın, arşiv paylaşımını daraltın. Kural 01 bu parolanın değiştirilmesini yasaklıyor (tüm ofis bilgisayarları kopar). Bu yüzden önerim: DENK için **ayrı, dar yetkili** bir SQL kullanıcısı açmak |
-| Bu kullanıcı `sysadmin` yetkisinde | Bir hata tüm şirketleri, yedekleri ve sunucuyu etkiler | DENK kullanıcısı yalnızca gereken tablolarda okuma/yazma |
-| FaturaCekme içinde portal kimlik dosyaları | Portal hesapları ele geçirilir | Windows Credential Manager veya ortam değişkeni, dosyada değil |
-| DENKWEB girişi sunucuda doğrulama yapmıyor, yönetici PIN'i varsayılan, ayar cevabı yapılandırmayı döndürüyor (DENKWEB kendi notlarından) | İnternete açılırsa muhasebe verisine yetkisiz erişim | Açık internete yayımlanmamalı. Yeni katmanda kimlik doğrulama baştan tasarlanır |
-| `SABITLER` konu 39'da GİB portal şifresi saklanıyor (ETA'nın kendi tasarımı) | Şirket klonlarken başka mükellefe taşınır (kural 17 vakaları) | Yeni şirket açılış denetiminde bu alan kontrol edilir; DENK bu alanı hiçbir zaman okumaz ve loglamaz |
+DENK **bir müşteri veya ofis bilgisayarına bağlanmaz.** Ters yön geçerlidir: herhangi bir
+makinedeki ajan, **bizim sunucumuza** bağlanır (WSS). Arşivdeki eski scriptler, bir ofis
+SQL oturumunun nasıl göründüğünü anlatmak için duruyordu. O oturum, o kullanıcı, o parola
+DENK'in işi değildir: kodda yoktur, merkeze gelmez, ajan bunları aramaz.
+
+Yerel ETA yazımı ileride olursa, bağlantıyı **yalnızca o makinenin kullanıcısı** kendi
+ekranından tanımlar. Kullanıcı açmak istemezse bu yol hiç denenmez. DENK için ayrı bir
+SQL kullanıcısı "açma" işi yoktur.

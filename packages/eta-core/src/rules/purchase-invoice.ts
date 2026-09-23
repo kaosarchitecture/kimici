@@ -7,11 +7,13 @@ export const NFT_THRESHOLD: Kurus = 3_000_000;
 
 export const TEXT = {
   nftPurchase: "N.FT İLE ALIŞ",
-  vatDefault: "İND. KDV",
+  vatDefault: "İND.KDV.",
   kkegMemo: "K.K.E.GİDERLER",
   vatSpecialCode: "INDKDV",
   purchaseSpecialCode1: "ALF",
   purchaseHeaderNote: "ALIM FATURASI",
+  /** Unmapped / cash closing. Canonical spelling is `100 01` (space, two-digit subcode). */
+  cashAccount: "100 01",
 } as const;
 
 export type PurchaseCategory = "passenger-car-service" | "general-expense" | "trade-goods";
@@ -48,7 +50,7 @@ export interface PurchaseInvoiceInput {
   /** Required for general-expense and trade-goods (learned from the company's history). */
   expenseAccount?: string;
   cashAccount?: string;
-  /** Office text for the VAT line; the approved case uses "İND. KDV". */
+  /** VAT line text. Canonical office spelling is `İND.KDV.` */
   vatDescription?: string;
   passengerCar?: PassengerCarAccounts;
   item?: string;
@@ -143,7 +145,7 @@ interface Closing {
 
 /** Kural 13 decision table. */
 function resolveClosing(input: PurchaseInvoiceInput, supplierName: string, blockers: Blocker[]): Closing {
-  const cash = input.cashAccount ?? "100 01";
+  const cash = input.cashAccount ?? TEXT.cashAccount;
   if (input.supplierAccount && rootAccount(input.supplierAccount) !== "320") {
     blockers.push({
       code: "SUPPLIER_ACCOUNT_NOT_320",

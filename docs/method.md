@@ -49,7 +49,7 @@ her çağrı denetim izine yazılır.
 | `fatura.planla` | Kural 13, 16, 18, 19 ile fiş planı | Hayır | Binek bakım ve genel gider çekirdekte hazır |
 | `banka.planla` | Kural 02, 15, 18 ile DEK planı | Hayır | Aylık tek fiş modu çekirdekte hazır |
 | `plan.denetle` | Değişmez kurallar (bkz. 5. bölüm) | Hayır | Çekirdekte hazır |
-| `fis.yaz` | Şablon klon, REF/fiş no, CP1254, mizan yeniden hesaplama, borç=alacak, tek transaction | **Evet** | Satır üretici çekirdekte hazır. Veritabanı bağlantısı onaydan sonra |
+| `fis.yaz` | Şablon klon, REF/fiş no, CP1254, mizan yeniden hesaplama, borç=alacak, tek transaction | **Evet** | Satır üretici çekirdekte hazır. Canlı yazma yalnız kullanıcı kendi makinesinde yerel ETA'yı açarsa |
 | `fis.denetle` | Yazma sonrası: satır sayıları, görünürlük alanları, hex, mizan denkliği | Hayır | Onaydan sonra |
 | `fis.geri_al` | Yalnız verilen REF: satırlar, başlık, o ayın mizanı | **Evet** | Onaydan sonra |
 
@@ -63,7 +63,7 @@ otomatik yapıyoruz:
 |---|---|---|
 | Tedarikçi → gider hesabı | aynı VKN'li önceki faturaların gider satırı | `fatura.planla` önerisi |
 | Banka işlem tipi → karşı hesap | önceki ayların DEK satırları | `banka.planla` özel eşleme listesi |
-| Açıklama kalıbı (`İND. KDV` / `İND.KDV.`) | önceki fişlerdeki satır açıklamaları | çelişki Ç4'ü şirket bazında çözer |
+| Açıklama kalıbı (`İND.KDV.`) | ofis yazımı; sapma varsa geçmişte işaretlenir | KDV satırı |
 | Fiş gruplama (ayda tek / işlem başına) | önceki DEK fişlerinin sayısı ve tarihleri | çelişki Ç8'i şirket bazında çözer |
 | Başlık/satır sabit alanları | aynı `MUHFISBELTUR` + `MUHFISOZELKOD1` son fiş | `fis.yaz` şablonu, çelişki Ç9'u çözer |
 | Onay / düzeltme / geri alma | DENK denetim izi | kuralın güveni, bir sonraki önerinin önceliği |

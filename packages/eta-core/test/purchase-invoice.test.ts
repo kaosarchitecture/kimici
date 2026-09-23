@@ -35,7 +35,7 @@ describe("golden purchase invoice (Kural 13 + 16 + 19)", () => {
     const expected = [
       { seq: 1, account: "770 13", side: "D", amount: 3_549_638, description: GOLDEN.supplierName, specialCode: "INDKDV" },
       { seq: 2, account: "689 01", side: "D", amount: 1_825_528, description: GOLDEN.supplierName, specialCode: "INDKDV" },
-      { seq: 3, account: "191 02 20", side: "D", amount: 709_928, description: "İND. KDV", specialCode: "INDKDV" },
+      { seq: 3, account: "191 02 20", side: "D", amount: 709_928, description: "İND.KDV.", specialCode: "INDKDV" },
       { seq: 4, account: "320 A=014", side: "C", amount: 6_085_094, description: "N.FT İLE ALIŞ" },
       { seq: 5, account: "950 01", side: "D", amount: 1_825_528, description: "K.K.E.GİDERLER" },
       { seq: 6, account: "951 01", side: "C", amount: 1_825_528, description: "K.K.E.GİDERLER" },
