@@ -1,3 +1,4 @@
+export { buildKnowledgePack, type KnowledgePack } from "./knowledge.ts";
 export {
   buildChatMessages,
   cfGrokId,

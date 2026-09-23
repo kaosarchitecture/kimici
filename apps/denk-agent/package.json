@@ -1,0 +1,19 @@
+{
+  "name": "@denk/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows edge agent. Pulls knowledge from our hub; processes vouchers on this machine.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "process": "node --experimental-strip-types src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

@@ -12,6 +12,7 @@ import {
   selectWorkingXaiModel,
   type ChatMessage,
 } from "../src/ai.ts";
+import { buildKnowledgePack } from "../src/knowledge.ts";
 import { defaultXaiEnvPath, parseXaiEnv } from "../src/xai-env.ts";
 import { documentFromFile, type UploadedDocument } from "../src/ubl.ts";
 
@@ -131,6 +132,10 @@ const server = createServer(async (req, res) => {
       res.writeHead(204);
       res.end();
       return;
+    }
+
+    if (method === "GET" && url.pathname === "/api/knowledge") {
+      return json(res, 200, { pack: buildKnowledgePack(), where: "bilgi paketi · müşteri defteri yok" });
     }
 
     if (method === "GET" && url.pathname === "/api/ai") {

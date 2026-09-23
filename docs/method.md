@@ -6,10 +6,9 @@ ekstresi, geri alma, şirket sağlık kontrolü) güvenle yapan bir yapay zeka a
 
 ## 1. İlke
 
-1. **Yapay zeka SQL yazmaz.** Konuşma `denk-app` Worker’da **Grok 4.5**
-   (`grok-4.20-0309-reasoning`) ile yapılır. Doğal dil komutunu anlar, doğru yeteneği
-   seçer, belirsizlikte soru sorar ve bir **plan** üretir. Modele müşteri defteri gitmez;
-   yalnız kullanıcının yüklediği evrak özeti gider.
+1. **İş sahada, bilgi merkezde.** DENK ajanı müşteri Windows’una kurulur; evrak ve fiş
+   orada işlenir. Merkez `GET /api/knowledge` ile kural paketini verir. Doğal dil varsa
+   o makinedeki model çağrılır; onlarca kiracı bizim çıkarım kotasını paylaşmaz.
 2. **Tutarı ve hesabı kural motoru belirler.** Kural motoru deterministiktir ve onaylı
    işlemlere karşı test edilmiştir.
 3. **Yazmadan önce değişmez kurallar (guard) çalışır.** Tek bir ihlal varsa yazma yapılmaz.

@@ -63,23 +63,20 @@ Windows ile onayladıysa, ajanın ittiği kısa ömürlü izinli görünüm çı
 
 ### 2.0 AI (nerede, nasıl bağlanır)
 
-AI müşteri makinesinde değildir. Tarayıcıda da model yoktur.
+SaaS yönü: **iş karşı Windows’ta**, **bilgi bizim sunucuda**.
 
 ```
-Kullanıcı (evrak yükler / yazar)
-        │  POST /api/evrak  ve  POST /api/ai
-        ▼
-denk-app  (bizim Cloudflare Worker)
-        │  Grok 4.5
-        │  XAI_API_KEY → api.x.ai  model=grok-4.20-0309-reasoning
-        ▼
-xAI Grok 4.5  (anahtar secret; koda yazılmaz)
+denk-app  GET /api/knowledge   (kural, İND.KDV., 100 01, eşik — defter yok)
+        │
+        ▼  ajan indirir / çeker
+Windows (müşteri)
+        DENK ajanı  +  eta-core  +  (isteğe bağlı) o makinedeki xai.env
+        evrak ve ETA burada işlenir
 ```
 
-- Evrak **bizim** Worker’a gelir (kullanıcı yükler).
-- AI yalnız yüklenen evrakın çıkarılan alanlarını ve kullanıcının yazısını görür.
-- `env.AI` binding `apps/denk-app/wrangler.jsonc` içindedir. `denk-central` değildir.
-- Worker müşteri Windows’una veya ETA SQL’ine bağlanmaz.
+Onlarca kullanıcı aynı anda bağlanınca fiş bizim Worker kuyruğuna girmez. Her PC kendi işini yapar. Merkez sabit boyutlu paket verir. Biz onların makinesine gitmeyiz; ajan **bize** bağlanır.
+
+Operatör masası (`admin-ui`) ayrıdır; müşteri trafiği değildir.
 
 ### 2.1 Merkez
 

@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { buildChatMessages, DEFAULT_XAI_MODEL, runXaiChat } from "../../../packages/consent-view/src/ai.ts";
+import { buildKnowledgePack } from "../../../packages/consent-view/src/knowledge.ts";
 import { documentFromFile, type UploadedDocument } from "../../../packages/consent-view/src/ubl.ts";
 
 export interface Env {
@@ -57,6 +58,11 @@ async function runGrok(env: Env, messages: ReturnType<typeof buildChatMessages>)
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/knowledge") {
+      if (request.method !== "GET") return json({ error: "izin yok" }, 405);
+      return json({ pack: buildKnowledgePack(), where: "bilgi paketi · müşteri defteri yok" });
+    }
 
     if (url.pathname === "/api/ai") {
       if (request.method === "GET") {
