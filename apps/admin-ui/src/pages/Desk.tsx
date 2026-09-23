@@ -26,7 +26,7 @@ export function Desk() {
     };
     const pull = () => {
       loadDesk().then(apply).catch(() => {
-        if (!stop) setError("Merkez kapalı. denk-app bu makinede 8788 portunda açık olmalı.");
+        if (!stop) setError("Liste alınamadı.");
       });
     };
     pull();
@@ -61,47 +61,33 @@ export function Desk() {
   }
 
   return (
-    <div>
-      <p className="lede">{desk?.where ?? "Kurallar bulutta. İşlem bağlanan bilgisayarda."}</p>
-      {desk ? (
-        <p className="lede">
-          Kural {desk.rulesVersion}: {desk.vatDescription} · nakit {desk.cashAccount} · KDV {desk.vatAccount} · gider{" "}
-          {desk.expenseAccount}
-        </p>
+    <div className={machine ? "desk" : "desk solo"}>
+      <section className="sheet">
+        {desk && desk.machines.length === 0 ? <p className="empty">Bağlı bilgisayar yok.</p> : null}
+        <div className="machines">
+          {desk?.machines.map((row) => (
+            <button
+              key={row.machineId}
+              type="button"
+              className={machine?.machineId === row.machineId ? "machine active" : "machine"}
+              onClick={() => setSelected(row.machineId)}
+            >
+              <span>
+                <strong>{row.machineId}</strong>
+                <small>{row.online ? "bağlı" : "bağlı değil"}{row.hostname !== row.machineId ? ` · ${row.hostname}` : ""}</small>
+              </span>
+              <em className={row.online ? "pill ok" : "pill"}>{row.lastJob ? STATUS[row.lastJob.status] : "bekliyor"}</em>
+            </button>
+          ))}
+        </div>
+        {error ? <p className="lede">{error}</p> : null}
+      </section>
+      {machine ? (
+        <section className="sheet">
+          <h2>{machine.machineId}</h2>
+          <MachineResult machine={machine} busy={busy} onRun={() => void run(machine)} />
+        </section>
       ) : null}
-      <div className="desk">
-        <section className="sheet">
-          <h2>Bağlanan bilgisayarlar</h2>
-          {desk && desk.machines.length === 0 ? (
-            <p className="empty">
-              Henüz bağlanan bilgisayar yok. İşlem yapılacak makinede ajanı açın. Kurallar buradan iner; o makinedeki log,
-              audit ve XML orada işlenir.
-            </p>
-          ) : null}
-          <div className="machines">
-            {desk?.machines.map((row) => (
-              <button
-                key={row.machineId}
-                type="button"
-                className={machine?.machineId === row.machineId ? "machine active" : "machine"}
-                onClick={() => setSelected(row.machineId)}
-              >
-                <span>
-                  <strong>{row.machineId}</strong>
-                  <small>{row.online ? "bağlı" : "bağlı değil"}{row.hostname !== row.machineId ? ` · ${row.hostname}` : ""}</small>
-                </span>
-                <em className={row.online ? "pill ok" : "pill"}>{row.lastJob ? STATUS[row.lastJob.status] : "bekliyor"}</em>
-              </button>
-            ))}
-          </div>
-          <p className="lede">O makinede: DENK_LOCAL klasörüyle npm run connect</p>
-        </section>
-        <section className="sheet">
-          <h2>{machine ? machine.machineId : "Fiş"}</h2>
-          {machine ? <MachineResult machine={machine} busy={busy} onRun={() => void run(machine)} /> : <p className="empty">Bilgisayar seçilmedi.</p>}
-          {error ? <p className="lede">{error}</p> : null}
-        </section>
-      </div>
     </div>
   );
 }
@@ -158,13 +144,7 @@ function MachineResult(props: { machine: MachineView; busy: boolean; onRun: () =
           {voucher.blockers.length > 0 ? <p className="lede">{voucher.blockers.join(" ")}</p> : null}
         </article>
       ))}
-      {job?.modelNote ? (
-        <p className="preview">
-          Bu bilgisayardaki model: {job.modelNote}
-        </p>
-      ) : (
-        <p className="lede">Tutarları kural motoru kurar. Model varsa yalnız bu bilgisayarda değerlendirme yazar.</p>
-      )}
+      {job?.modelNote ? <p className="preview">{job.modelNote}</p> : null}
     </>
   );
 }

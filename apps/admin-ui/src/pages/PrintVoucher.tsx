@@ -26,7 +26,7 @@ export function PrintVoucher() {
   if (!machine || vouchers.length === 0) {
     return (
       <section className="sheet" style={{ maxWidth: 520 }}>
-        <p className="empty">{missing ? "Yazdırılacak fiş yok. Önce bir bilgisayar bağlanıp kendi klasörünü işlemeli." : "Yükleniyor…"}</p>
+        <p className="empty">{missing ? "Yazdırılacak fiş yok." : "Yükleniyor…"}</p>
         <a className="as-btn" href="#/">
           Bilgisayarlara dön
         </a>
@@ -37,9 +37,7 @@ export function PrintVoucher() {
   return (
     <div className="print-wrap">
       <div className="print-bar no-print">
-        <p>
-          {machine.machineId} üzerinde kurulan fiş. Kaynak dosya bu sunucuya gelmedi.
-        </p>
+        <p>{machine.machineId}</p>
         <div className="row" style={{ marginTop: 0 }}>
           <a className="as-btn ghost" href="#/">
             Bilgisayarlar
