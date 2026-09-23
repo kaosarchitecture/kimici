@@ -111,11 +111,11 @@ export function Workspace({ state }: { state: HubSnapshot }) {
             Görünümü kapat
           </button>
         </div>
-        {waiting ? (
-          <p className="lede">
-            Onay bekleniyor. Kullanıcı makinesindeki pencere: <a href="#/onay">Windows onayı</a>
-          </p>
-        ) : null}
+        <p className="lede">
+          Yazdırma için: <a href="#/">Fiş yazdır</a>
+          {waiting ? " · Onay penceresi: " : null}
+          {waiting ? <a href="#/onay">Windows onayı</a> : null}
+        </p>
         {error ? <p className="lede">{error}</p> : null}
       </section>
 
