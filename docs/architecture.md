@@ -352,12 +352,13 @@ tek transaction, borç/alacak ve hex denetimi, REF bazlı geri alma. Yapay zeka 
 
 ```
 .
-├── apps/                         # henüz yok (onay sonrası)
-│   ├── control-plane/            # Cloudflare Worker
-│   └── admin-ui/                 # React, Türkçe arayüz
+├── apps/
+│   ├── control-plane/            # henüz yok — Cloudflare Worker
+│   └── admin-ui/                 # VAR: sıfırdan React, DENKWEB değil
 ├── agent/                        # henüz yok — öneri: Node.js Windows servisi
 ├── packages/
-│   └── eta-core/                 # VAR: deterministik kural + yazıcı (DB yok)
+│   ├── eta-core/                 # VAR: deterministik kural + yazıcı (DB yok)
+│   └── consent-view/             # VAR: Windows onayı + izinli görünüm
 ├── docs/
 └── .env.example
 ```

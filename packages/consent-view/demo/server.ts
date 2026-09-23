@@ -7,7 +7,7 @@ import { demoWindowsIdentity } from "../src/windows.ts";
 import { VIEW_FIELDS, type ViewField } from "../src/types.ts";
 import { LOCAL_MACHINE_RECORDS } from "./fixture.ts";
 
-const root = fileURLToPath(new URL("./public", import.meta.url));
+const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
 const hub = new ConsentHub();
 const clients = new Set<ServerResponse>();
 const PORT = Number(process.env.PORT ?? 8788);
@@ -16,9 +16,18 @@ const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".woff2": "font/woff2",
 };
 
+function cors(res: ServerResponse): void {
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type");
+}
+
 function json(res: ServerResponse, status: number, body: unknown): void {
+  cors(res);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }
@@ -46,6 +55,13 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
     const method = req.method ?? "GET";
+    cors(res);
+
+    if (method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
 
     if (method === "GET" && url.pathname === "/api/state") {
       return json(res, 200, hub.snapshot());
@@ -103,11 +119,24 @@ const server = createServer(async (req, res) => {
       return json(res, 200, hub.snapshot());
     }
 
-    const filePath = url.pathname === "/" ? join(root, "index.html") : join(root, url.pathname);
-    if (!filePath.startsWith(root)) return json(res, 403, { error: "forbidden" });
-    const data = await readFile(filePath);
-    res.writeHead(200, { "content-type": MIME[extname(filePath)] ?? "application/octet-stream" });
-    res.end(data);
+    if (method === "GET") {
+      const relative = url.pathname === "/" ? "/index.html" : url.pathname;
+      const filePath = join(uiRoot, relative);
+      if (!filePath.startsWith(uiRoot)) return json(res, 403, { error: "forbidden" });
+      try {
+        const data = await readFile(filePath);
+        res.writeHead(200, { "content-type": MIME[extname(filePath)] ?? "application/octet-stream" });
+        res.end(data);
+        return;
+      } catch {
+        const fallback = await readFile(join(uiRoot, "index.html"));
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        res.end(fallback);
+        return;
+      }
+    }
+
+    json(res, 404, { error: "bulunamadı" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Hata";
     json(res, 400, { error: message });
@@ -115,5 +144,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`DENK izinli görünüm: http://127.0.0.1:${PORT}`);
+  console.log(`DENK arayüz: http://127.0.0.1:${PORT}`);
 });

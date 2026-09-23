@@ -9,11 +9,14 @@ kendi bilgisayarında uygulayan SaaS.
 - Tasarım dokümanları hazır.
 - DENK ofis arşivi incelendi; onaylı alış faturası ve banka işleminden yöntem çıkarıldı.
 - İlk kod: `packages/eta-core` — veritabanı bağlantısı olmayan, test edilmiş kural çekirdeği.
-- İzinli görünüm: `packages/consent-view` — AI izin ister, Windows yerelde onaylar, ajan iter.
+- İzinli görünüm protokolü: `packages/consent-view`.
+- Yeni web arayüzü: `apps/admin-ui` — DENKWEB’den bağımsız, sıfırdan.
 
 ```bash
 cd packages/eta-core && npm install && npm test
-cd packages/consent-view && npm install && npm test && npm run demo
+cd packages/consent-view && npm install && npm test
+cd apps/admin-ui && npm install && npm run build
+cd ../packages/consent-view && npm run demo
 ```
 
 ## Özet
@@ -39,6 +42,7 @@ cd packages/consent-view && npm install && npm test && npm run demo
 | [docs/volume.md](docs/volume.md) | İşlem hacmi modeli |
 | [docs/protocol-and-data.md](docs/protocol-and-data.md) | Kural formatı, mesaj sözleşmesi, şemalar |
 | [docs/consent-and-view.md](docs/consent-and-view.md) | Windows onayı ve izinli web görünümü |
+| [apps/admin-ui](apps/admin-ui) | Yeni Türkçe çalışma alanı (DENKWEB değil) |
 | [docs/security.md](docs/security.md) | Tehdit modeli, secret, KVKK notları |
 | [docs/roadmap.md](docs/roadmap.md) | Fazlar ve onay bekleyen kararlar |
 

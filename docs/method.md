@@ -125,13 +125,11 @@ fatura notu, şirket geçmişinden hesap adayları). Tutar, VKN ve cari adı mod
 de sınıflandırma yapılabilir. Bulut model mi, müşteri makinesinde yerel model mi
 kullanılacağı KVKK açısından bir karardır ve onayınıza bağlıdır (bkz. `roadmap.md`).
 
-## 7. Mevcut DENKWEB ile ilişki
+## 7. Arayüz
 
-DENKWEB (Node.js) çalışan bir arayüz ve SQL köprüsüne sahip. Bu yöntem onu bozmaz:
+Merkez web arayüzü `apps/admin-ui` içinde sıfırdan yazıldı. DENKWEB ekranları, PIN’i,
+portal akışı veya SQL formu kullanılmaz.
 
-- `packages/eta-core` saf TypeScript'tir, veritabanı bağlantısı içermez. DENKWEB'in
-  `eta_sql_bridge.js` katmanından veya yeni saha ajanından aynı şekilde çağrılabilir.
-- Aynı çekirdek, merkez tarafında kural simülasyonu için de kullanılır (Cloudflare Workers
-  TypeScript çalıştırır). Böylece kural hem merkezde hem sahada tek kod tabanından çalışır.
-- Bu nedenle saha ajanı için önceki tasarımdaki .NET yerine **Node.js/TypeScript**
-  öneriyorum: DENKWEB ile aynı çalışma zamanı, tek kural kodu. Karar onayınıza bağlı.
+- `packages/eta-core` veritabanına bağlanmaz.
+- Görünüm yolu: AI izin ister → Windows onayı → ajan iter → `admin-ui` tabloyu çizer.
+- Eski DENKWEB ayrı bir arşivdir; bu ürün onun özelliklerini taşımaz.

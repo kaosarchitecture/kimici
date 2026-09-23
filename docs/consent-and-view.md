@@ -57,7 +57,9 @@ Akış:
 5. Web tablosu yalnız `fieldSet` kolonlarını çizer.
 6. Süre dolunca veya "Görünümü kapat" ile satırlar silinir.
 
-Çalışan gösterim: `packages/consent-view` (`npm test`, `npm run demo`).
+Çalışan arayüz: `apps/admin-ui` (DENKWEB’den bağımsız). Protokol: `packages/consent-view`.
+`apps/admin-ui` derlenir, `packages/consent-view` `npm run demo` ile `http://127.0.0.1:8788` üzerinde
+API ve yeni arayüzü birlikte sunar.
 
 ## 5. Mesajlar
 
