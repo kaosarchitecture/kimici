@@ -1,56 +1,38 @@
 import type { ReactNode } from "react";
-import { STATUS_LABELS } from "../labels.ts";
-import type { HubStatus } from "../types.ts";
 
-export type PageId = "evrak" | "yazdir" | "calisma" | "onay" | "ajan";
-
-const LINKS: { id: PageId; href: string; label: string }[] = [
-  { id: "evrak", href: "#/", label: "Evrak" },
-  { id: "yazdir", href: "#/yazdir", label: "Fiş yazdır" },
-  { id: "calisma", href: "#/calisma", label: "Çalışma" },
-  { id: "onay", href: "#/onay", label: "Windows onayı" },
-  { id: "ajan", href: "#/ajan", label: "Ajan" },
-];
-
-function pillClass(status: HubStatus): string {
-  if (status === "ready" || status === "granted") return "ok";
-  if (status === "denied" || status === "revoked" || status === "expired") return "bad";
-  if (status === "pending" || status === "prompted") return "wait";
-  return "";
-}
-
-export function Shell(props: {
-  page: PageId;
-  title: string;
-  lede: string;
-  status: HubStatus;
-  children: ReactNode;
-}) {
+export function Shell(props: { children: ReactNode }) {
   return (
     <div className="app">
+      <div className="aurora" aria-hidden>
+        <i className="orb orb-a" />
+        <i className="orb orb-b" />
+        <i className="orb orb-c" />
+      </div>
       <aside className="rail">
         <div className="brand">
-          DENK
-          <span>Merkez çalışma alanı</span>
+          <img className="brand-denk" src="/brand/denk.png" alt="DENK" />
+          <span className="brand-rule" />
+          <p className="brand-line">
+            <span className="brand-dijital">dijital</span>
+            <span className="brand-personel">personel</span>
+            <i className="brand-dot" aria-hidden />
+          </p>
+          <p className="brand-by">by K.A.O.S. ARC.</p>
         </div>
-        <nav className="nav" aria-label="Sayfalar">
-          {LINKS.map((link) => (
-            <a key={link.id} href={link.href} className={props.page === link.id ? "active" : undefined}>
-              {link.label}
-            </a>
-          ))}
-        </nav>
-        <p className="rail-note">
-          Ajan bize bağlanır. Bu arayüz DENKWEB değildir; izinli fişi Windows onayıyla gösterir.
-        </p>
+        <div className="rail-foot">
+          <p className="rail-note">
+            Defter müşteri Windows’unda kalır. Bu ekran yalnız ajanın ittiği izinli satırları gösterir.
+          </p>
+          <img className="brand-kaos" src="/brand/kaos-arc.png" alt="K.A.O.S. ARC." />
+        </div>
       </aside>
       <main className="stage">
         <header className="top">
           <div>
-            <h1>{props.title}</h1>
-            <p className="lede">{props.lede}</p>
+            <h1>İzinli görünüm</h1>
+            <p className="lede">Evrak yüklenmez. Kiracı kodu ile bağlanın; ajan onaydan sonra satır iter.</p>
           </div>
-          <span className={`pill ${pillClass(props.status)}`}>{STATUS_LABELS[props.status]}</span>
+          <img className="wordmark-line" src="/brand/dijital-personel.png" alt="dijital personel" />
         </header>
         {props.children}
       </main>

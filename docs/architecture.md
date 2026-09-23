@@ -61,6 +61,23 @@ Windows ile onayladıysa, ajanın ittiği kısa ömürlü izinli görünüm çı
 
 ## 2. Bileşenler
 
+### 2.0 AI (nerede, nasıl bağlanır)
+
+SaaS yönü: **iş karşı Windows’ta**, **bilgi bizim sunucuda**.
+
+```
+denk-app  GET /api/knowledge   (kural, İND.KDV., 100 01, eşik — defter yok)
+        │
+        ▼  ajan indirir / çeker
+Windows (müşteri)
+        DENK ajanı  +  eta-core  +  (isteğe bağlı) o makinedeki xai.env
+        evrak ve ETA burada işlenir
+```
+
+Onlarca kullanıcı aynı anda bağlanınca fiş bizim Worker kuyruğuna girmez. Her PC kendi işini yapar. Merkez sabit boyutlu paket verir. Biz onların makinesine gitmeyiz; ajan **bize** bağlanır.
+
+Operatör masası (`admin-ui`) ayrıdır; müşteri trafiği değildir.
+
 ### 2.1 Merkez
 
 | Bileşen | Görev | Önerilen teknoloji |

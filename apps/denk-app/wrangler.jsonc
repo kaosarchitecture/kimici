@@ -3,6 +3,7 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-23",
   "workers_dev": true,
+  "routes": [{ "pattern": "app.denkmuhasebe.com", "custom_domain": true }],
   "assets": {
     "directory": "../admin-ui/dist",
     "binding": "ASSETS",
@@ -10,8 +11,15 @@
     "run_worker_first": ["/api/*"]
   },
   "durable_objects": {
-    "bindings": [{ "name": "EVRAK", "class_name": "EvrakStore" }]
+    "bindings": [
+      { "name": "HUB", "class_name": "TenantHub" },
+      { "name": "REGISTRY", "class_name": "TenantRegistry" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["EvrakStore"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["EvrakStore"] },
+    { "tag": "v2", "deleted_classes": ["EvrakStore"], "new_sqlite_classes": ["TenantHub"] },
+    { "tag": "v3", "new_sqlite_classes": ["TenantRegistry"] }
+  ],
   "observability": { "enabled": true }
 }

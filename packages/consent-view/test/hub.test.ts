@@ -94,6 +94,17 @@ describe("ConsentHub", () => {
     ).toThrow(/gönderilemez/);
   });
 
+  it("restores a snapshot so a Durable Object can continue the grant", () => {
+    const first = new ConsentHub();
+    const request = first.requestView({ purpose: "deneme", fields: ["account", "description"] });
+    const grant = first.grant(request.requestId, { identity: demoWindowsIdentity() });
+    const second = new ConsentHub();
+    second.restore(first.snapshot());
+    const view = second.pushView(grant.grantId, LOCAL);
+    expect(view.records[0]).toEqual({ account: "191 02 20", description: "İND.KDV." });
+    expect(second.snapshot().status).toBe("ready");
+  });
+
   it("expires a pending request so the view cannot be pushed later", () => {
     const hub = new ConsentHub();
     const start = new Date("2026-09-23T12:00:00Z");

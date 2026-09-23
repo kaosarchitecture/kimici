@@ -35,6 +35,15 @@ export function attestWindowsIdentity(input: WindowsIdentity): WindowsIdentity {
   return { account, sid, interactive: true, attestedAt: input.attestedAt };
 }
 
+/** Product path. Tests may use demoWindowsIdentity; HTTP and the agent must not. */
+export function assertLiveWindowsIdentity(input: WindowsIdentity): WindowsIdentity {
+  const identity = attestWindowsIdentity(input);
+  if (/^DEMO\\/i.test(identity.account) || /DEMO/i.test(identity.sid)) {
+    throw new Error("DEMO kimliği canlı yolda kullanılamaz.");
+  }
+  return identity;
+}
+
 /** Demo-only stand-in. Live agent reads the interactive WindowsIdentity on that PC. */
 export function demoWindowsIdentity(now = new Date()): WindowsIdentity {
   return {

@@ -1,4 +1,4 @@
-# DENK — ETA saha öğrenme platformu
+# DENK dijital personel — K.A.O.S. ARC.
 
 Muhasebe kurallarını operatörün verdiği örneklerden ve müşterinin ETA programındaki geçmiş
 davranışlarından öğrenen, bu kuralları **müşteri verisini merkeze taşımadan** müşterinin
@@ -11,7 +11,10 @@ kendi bilgisayarında uygulayan SaaS.
 - İlk kod: `packages/eta-core` — veritabanı bağlantısı olmayan, test edilmiş kural çekirdeği.
 - İzinli görünüm protokolü: `packages/consent-view`.
 - Yeni web arayüzü: `apps/admin-ui` — DENKWEB’den bağımsız, sıfırdan.
-- Cloudflare Worker iskeleti: `apps/denk-app` (denk-central / denkmuhasebe.com değil).
+- Cloudflare Worker: `apps/denk-app` (denk-central / denkmuhasebe.com değil).
+- SaaS: bilgi merkeze (`GET /api/knowledge`), iş Windows ajanına (`apps/denk-agent`).
+  Web yalnız kiracı başına itilen izinli görünümü gösterir. Evrak Worker’da durmaz.
+  Onlarca kullanıcı fişi bizim sunucuda sıraya sokmaz.
 
 ```bash
 cd packages/eta-core && npm install && npm test

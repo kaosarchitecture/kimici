@@ -1,82 +1,84 @@
 import { DurableObject } from "cloudflare:workers";
-import { documentFromFile, type UploadedDocument } from "../../../packages/consent-view/src/ubl.ts";
+import { ConsentHub, type HubSnapshot } from "../../../packages/consent-view/src/hub.ts";
+import {
+  isBookPath,
+  isControlPlanePath,
+  isHubPath,
+  json,
+  routeControlPlane,
+} from "../../../packages/consent-view/src/http.ts";
+import { TenantBook, type RegistrySnapshot } from "../../../packages/consent-view/src/registry.ts";
+import { tenantFromRequest } from "../../../packages/consent-view/src/tenant.ts";
 
 export interface Env {
   ASSETS: Fetcher;
-  EVRAK: DurableObjectNamespace<EvrakStore>;
+  HUB: DurableObjectNamespace<TenantHub>;
+  REGISTRY: DurableObjectNamespace<TenantRegistry>;
 }
 
-const IDLE = {
-  status: "idle",
-  request: null,
-  grant: null,
-  view: null,
-  denyReason: null,
-};
-
-const MAX = 5 * 1024 * 1024;
-
-export class EvrakStore extends DurableObject<Env> {
-  async getDoc(): Promise<UploadedDocument | null> {
-    return (await this.ctx.storage.get<UploadedDocument>("doc")) ?? null;
-  }
-
-  async putDoc(doc: UploadedDocument): Promise<UploadedDocument> {
-    await this.ctx.storage.put("doc", doc);
-    return doc;
+export class TenantHub extends DurableObject<Env> {
+  async fetch(request: Request): Promise<Response> {
+    const hub = new ConsentHub();
+    const snap = await this.ctx.storage.get<HubSnapshot>("hub");
+    if (snap) hub.restore(snap);
+    const book = new TenantBook();
+    const reg = await this.env.REGISTRY.getByName("book").snapshot();
+    book.restore(reg);
+    const res = await routeControlPlane(request, { resolveHub: async () => hub, book });
+    await this.ctx.storage.put("hub", hub.snapshot());
+    return res ?? json({ error: "bulunamadı" }, 404);
   }
 }
 
-function json(data: unknown, status = 200): Response {
-  return Response.json(data, { status });
-}
+export class TenantRegistry extends DurableObject<Env> {
+  private async book(): Promise<TenantBook> {
+    const store = new TenantBook();
+    const snap = await this.ctx.storage.get<RegistrySnapshot>("book");
+    if (snap) store.restore(snap);
+    return store;
+  }
 
-function decodeBase64(raw: string): Uint8Array {
-  const bin = atob(raw);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  return out;
+  async persist(store: TenantBook): Promise<void> {
+    await this.ctx.storage.put("book", store.snapshot());
+  }
+
+  async snapshot(): Promise<RegistrySnapshot> {
+    return (await this.book()).snapshot();
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const store = await this.book();
+    const res = await routeControlPlane(request, { book: store });
+    await this.persist(store);
+    return res ?? json({ error: "bulunamadı" }, 404);
+  }
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/state") return json(IDLE);
-
-    if (url.pathname === "/api/events") {
-      return new Response(`data: ${JSON.stringify(IDLE)}\n\n`, {
-        headers: {
-          "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-cache",
-        },
-      });
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+      return json(null, 204);
     }
 
-    if (url.pathname === "/api/evrak") {
-      const store = env.EVRAK.getByName("last");
-      if (request.method === "GET") {
-        return json({ document: await store.getDoc() });
+    if (isBookPath(url.pathname)) {
+      return env.REGISTRY.getByName("book").fetch(request);
+    }
+
+    if (isHubPath(url.pathname)) {
+      try {
+        const tenant = tenantFromRequest(request);
+        return env.HUB.getByName(tenant).fetch(request);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Kiracı kodu geçersiz.";
+        return json({ error: message }, 400);
       }
-      if (request.method === "POST") {
-        const body = (await request.json()) as {
-          fileName?: string;
-          mime?: string;
-          contentBase64?: string;
-        };
-        const bytes = decodeBase64(body.contentBase64 ?? "");
-        if (bytes.byteLength === 0) return json({ error: "Dosya boş." }, 400);
-        if (bytes.byteLength > MAX) return json({ error: "Dosya 5 MB üstü olamaz." }, 400);
-        const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-        const doc = documentFromFile(
-          (body.fileName ?? "evrak").slice(0, 200),
-          body.mime ?? "application/octet-stream",
-          bytes.byteLength,
-          text,
-        );
-        return json({ document: await store.putDoc(doc) });
-      }
-      return json({ error: "izin yok" }, 405);
+    }
+
+    if (isControlPlanePath(url.pathname)) {
+      const res = await routeControlPlane(request);
+      return res ?? json({ error: "bulunamadı" }, 404);
     }
 
     return env.ASSETS.fetch(request);

@@ -1,10 +1,11 @@
-# denk-app (Cloudflare Worker)
+# denk-app (ince merkez)
 
-Yeni evrak + fiş yazdır uygulaması. **denk-central** ve **denkmuhasebe.com** değildir.
+Müşteri defteri burada işlenmez. Ajan `GET /api/knowledge` ile kural paketini çeker.
+Web yalnız kiracı başına `TenantHub` içinde, Windows onayıyla itilen alanları gösterir.
 
-- `workers_dev: true` — yalnızca `denk-app.<hesap>.workers.dev`
-- Ana siteye, `C:\DENK\data` klasörüne ve Windows görevlerine bağlanmaz
-- `app.denkmuhasebe.com` route’u buraya yazılmaz
+`POST /api/evrak` ve Worker üzerinden evraklı Grok yolu kaldırıldı (410).
+
+Operatör masası (`admin-ui`) ayrı. **denk-central** / **denkmuhasebe.com** değildir.
 
 ```bash
 cd ../admin-ui && npm run build

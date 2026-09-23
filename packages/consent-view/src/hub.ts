@@ -54,6 +54,15 @@ export class ConsentHub {
     };
   }
 
+  /** Reload a Durable Object / process snapshot. Next snapshot() still applies TTL. */
+  restore(snapshot: HubSnapshot): void {
+    this.status = snapshot.status;
+    this.request = snapshot.request;
+    this.currentGrant = snapshot.grant;
+    this.view = snapshot.view;
+    this.denyReason = snapshot.denyReason;
+  }
+
   /** AI on our server asks the already-connected agent for a scoped view. */
   requestView(input: RequestViewInput): ConsentRequest {
     const now = input.now ?? new Date();

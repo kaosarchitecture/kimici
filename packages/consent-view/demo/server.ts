@@ -3,18 +3,21 @@ import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ConsentHub } from "../src/hub.ts";
-import { demoWindowsIdentity } from "../src/windows.ts";
-import { VIEW_FIELDS, type ViewField } from "../src/types.ts";
-import { LOCAL_MACHINE_RECORDS } from "./fixture.ts";
-import { documentFromFile, type UploadedDocument } from "../src/ubl.ts";
-
-const MAX_EVRAK = 5 * 1024 * 1024;
-let lastEvrak: UploadedDocument | null = null;
+import { CORS, isControlPlanePath, routeControlPlane } from "../src/http.ts";
+import { TenantBook } from "../src/registry.ts";
 
 const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
-const hub = new ConsentHub();
-const clients = new Set<ServerResponse>();
 const PORT = Number(process.env.PORT ?? 8788);
+const hubs = new Map<string, ConsentHub>();
+const book = new TenantBook();
+
+function hubFor(tenant: string): ConsentHub {
+  const existing = hubs.get(tenant);
+  if (existing) return existing;
+  const hub = new ConsentHub();
+  hubs.set(tenant, hub);
+  return hub;
+}
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -24,124 +27,61 @@ const MIME: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-function cors(res: ServerResponse): void {
-  res.setHeader("access-control-allow-origin", "*");
-  res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type");
+function applyCors(res: ServerResponse): void {
+  for (const [key, value] of Object.entries(CORS)) res.setHeader(key, value);
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
-  cors(res);
+  applyCors(res);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }
 
-function broadcast(): void {
-  const payload = `data: ${JSON.stringify(hub.snapshot())}\n\n`;
-  for (const client of clients) client.write(payload);
-}
-
-async function readBody(req: IncomingMessage): Promise<unknown> {
+async function toFetchRequest(req: IncomingMessage, url: URL): Promise<Request> {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (typeof value === "string") headers.set(key, value);
+    else if (Array.isArray(value)) headers.set(key, value.join(", "));
+  }
+  const method = req.method ?? "GET";
+  if (method === "GET" || method === "HEAD") {
+    return new Request(url, { method, headers });
+  }
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  return new Request(url, { method, headers, body: Buffer.concat(chunks) });
 }
 
-function asFields(value: unknown): ViewField[] {
-  if (!Array.isArray(value)) return [...VIEW_FIELDS];
-  return value.filter((item): item is ViewField =>
-    (VIEW_FIELDS as readonly string[]).includes(String(item)),
-  );
+async function writeFetchResponse(res: ServerResponse, response: Response): Promise<void> {
+  applyCors(res);
+  response.headers.forEach((value, key) => {
+    if (key === "content-length") return;
+    res.setHeader(key, value);
+  });
+  res.writeHead(response.status);
+  if (response.status === 204 || !response.body) {
+    res.end();
+    return;
+  }
+  res.end(Buffer.from(await response.arrayBuffer()));
 }
 
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
     const method = req.method ?? "GET";
-    cors(res);
+    applyCors(res);
 
-    if (method === "OPTIONS") {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-
-    if (method === "GET" && url.pathname === "/api/state") {
-      return json(res, 200, hub.snapshot());
-    }
-
-    if (method === "GET" && url.pathname === "/api/evrak") {
-      return json(res, 200, { document: lastEvrak });
-    }
-
-    if (method === "POST" && url.pathname === "/api/evrak") {
-      const body = (await readBody(req)) as {
-        fileName?: string;
-        mime?: string;
-        contentBase64?: string;
-      };
-      const fileName = (body.fileName ?? "evrak").slice(0, 200);
-      const mime = body.mime ?? "application/octet-stream";
-      const raw = body.contentBase64 ?? "";
-      const buf = Buffer.from(raw, "base64");
-      if (buf.length === 0) return json(res, 400, { error: "Dosya boş." });
-      if (buf.length > MAX_EVRAK) return json(res, 400, { error: "Dosya 5 MB üstü olamaz." });
-      const asText = buf.toString("utf8");
-      lastEvrak = documentFromFile(fileName, mime, buf.length, asText);
-      return json(res, 200, { document: lastEvrak });
-    }
-
-    if (method === "GET" && url.pathname === "/api/events") {
-      res.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
+    if (isControlPlanePath(url.pathname) || (method === "OPTIONS" && url.pathname.startsWith("/api/"))) {
+      const request = await toFetchRequest(req, url);
+      const response = await routeControlPlane(request, {
+        book,
+        resolveHub: async (tenant) => hubFor(tenant),
       });
-      res.write(`data: ${JSON.stringify(hub.snapshot())}\n\n`);
-      clients.add(res);
-      req.on("close", () => clients.delete(res));
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/api/ai/request") {
-      const body = (await readBody(req)) as { purpose?: string; fields?: string[] };
-      const request = hub.requestView({
-        purpose: body.purpose ?? "Ağustos alış faturası önizlemesi",
-        fields: asFields(body.fields),
-      });
-      hub.markPrompted(request.requestId, demoWindowsIdentity());
-      broadcast();
-      return json(res, 200, hub.snapshot());
-    }
-
-    if (method === "POST" && url.pathname === "/api/agent/grant") {
-      const body = (await readBody(req)) as { fields?: string[] };
-      const snap = hub.snapshot();
-      if (!snap.request) return json(res, 400, { error: "Bekleyen izin isteği yok." });
-      const grant = hub.grant(snap.request.requestId, {
-        identity: demoWindowsIdentity(),
-        fields: asFields(body.fields ?? snap.request.fields),
-      });
-      hub.pushView(grant.grantId, LOCAL_MACHINE_RECORDS);
-      broadcast();
-      return json(res, 200, hub.snapshot());
-    }
-
-    if (method === "POST" && url.pathname === "/api/agent/deny") {
-      const snap = hub.snapshot();
-      if (!snap.request) return json(res, 400, { error: "Bekleyen izin isteği yok." });
-      hub.deny(snap.request.requestId, "Kullanıcı Windows onayını reddetti.");
-      broadcast();
-      return json(res, 200, hub.snapshot());
-    }
-
-    if (method === "POST" && url.pathname === "/api/revoke") {
-      const snap = hub.snapshot();
-      if (!snap.grant) return json(res, 400, { error: "Geri alınacak onay yok." });
-      hub.revoke(snap.grant.grantId);
-      broadcast();
-      return json(res, 200, hub.snapshot());
+      if (response) {
+        await writeFetchResponse(res, response);
+        return;
+      }
     }
 
     if (method === "GET") {
@@ -169,5 +109,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`DENK arayüz: http://0.0.0.0:${PORT}`);
+  console.log(`DENK: http://0.0.0.0:${PORT}`);
+  console.log("Evrak yok · büro kaydı + cihaz anahtarı");
 });

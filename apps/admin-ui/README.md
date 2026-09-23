@@ -1,13 +1,11 @@
-# DENK çalışma alanı
+# DENK dijital personel
 
-Sıfırdan yazılmış Türkçe operatör arayüzü. DENKWEB değildir; onun ekranları kopyalanmadı.
+K.A.O.S. ARC. ürünü. Sıfırdan yazılmış Türkçe arayüz. DENKWEB değildir.
 
-- `/#/` Çalışma: AI izin ister, izinli fiş tablosu burada görünür.
-- `/#/onay` Windows onay yüzeyi (canlıda ajanın yerelde açtığı pencere).
-- `/#/ajan` Bağlantı yönü. SQL / parola formu yok.
+- İzinli görünüm — evrak yüklenmez; ajanın ittiği satırlar
 
 ```bash
 npm install && npm run build
 ```
 
-API ile birlikte: `packages/consent-view` içinde `npm run demo` → http://127.0.0.1:8788
+Merkez `GET /api/knowledge` verir. Defter Worker’da durmaz.

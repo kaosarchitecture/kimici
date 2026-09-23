@@ -6,8 +6,9 @@ ekstresi, geri alma, şirket sağlık kontrolü) güvenle yapan bir yapay zeka a
 
 ## 1. İlke
 
-1. **Yapay zeka SQL yazmaz.** Doğal dil komutunu anlar, doğru yeteneği seçer, belirsizlikte
-   soru sorar ve bir **plan** üretir.
+1. **İş sahada, bilgi merkezde.** DENK ajanı müşteri Windows’una kurulur; evrak ve fiş
+   orada işlenir. Merkez `GET /api/knowledge` ile kural paketini verir. Doğal dil varsa
+   o makinedeki model çağrılır; onlarca kiracı bizim çıkarım kotasını paylaşmaz.
 2. **Tutarı ve hesabı kural motoru belirler.** Kural motoru deterministiktir ve onaylı
    işlemlere karşı test edilmiştir.
 3. **Yazmadan önce değişmez kurallar (guard) çalışır.** Tek bir ihlal varsa yazma yapılmaz.
