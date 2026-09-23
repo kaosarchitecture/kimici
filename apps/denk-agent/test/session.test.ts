@@ -9,6 +9,19 @@ const pack = buildKnowledgePack();
 function port(rows: Record<string, Record<string, unknown>[]>): SqlPort {
   return {
     async query(_server, database, statement) {
+      if (statement.includes("INFORMATION_SCHEMA")) {
+        const spec: Record<string, string[]> = {
+          SIRKET: ["SIRKOD", "SIRDBNAME", "SIRPATH"],
+          MUHFIS: ["MUHFISREFNO", "MUHFISNO", "MUHFISTAR", "MUHFISSEVNO", "MUHFISBELTUR", "MUHFISBORCTOP", "MUHFISALACAKTOP"],
+          MUHHAR: ["MUHHARREFNO", "MUHHARSIRANO", "MUHHARMUHKOD", "MUHHARBATIPI", "MUHHARTUTAR", "MUHHARACIKLAMA", "MUHHARTAR"],
+        };
+        const found: Record<string, unknown>[] = [];
+        for (const [table, cols] of Object.entries(spec)) {
+          if (!rows[`${database}.${table}`]) continue;
+          for (const columnName of cols) found.push({ tableName: table, columnName });
+        }
+        return found;
+      }
       if (statement.includes("MUHHARSIRANO")) {
         return [
           {
@@ -150,5 +163,48 @@ describe("hub messages", () => {
     expect(done.outbound?.status).toBe("empty");
     expect(done.outbound?.eta?.build).toBe("closed");
     expect(done.runtime.build).toBeUndefined();
+  });
+
+  it("finds ETA tables without a fixed master name and sends that path to xAI", async () => {
+    const runtime: AgentRuntime = { pack, machineId: "pc-a" };
+    let facts = "";
+    const done = await handleHubMessage(runtime, { type: "job.run", jobId: "job_1" }, {
+      servers: ["10.0.0.8,1433"],
+      log: () => {},
+      sql: port({
+        "master.master": [{ name: "OFIS" }],
+        "OFIS.SIRKET": [{ SIRKOD: "A1", SIRDBNAME: "ETA_A1_2026", SIRPATH: "D:\\DATA\\A1" }],
+        "ETA_A1_2026.MUHFIS": [{ MUHFISREFNO: 2, MUHFISNO: "MA-000002" }],
+        "ETA_A1_2026.MUHHAR": [{ MUHHARREFNO: 2, MUHHARSIRANO: 1 }],
+      }),
+      model: async (text) => {
+        facts = text;
+        return "A1 fişi MA-999999 bu bilgisayarda.";
+      },
+    });
+    expect(facts).toContain("sunucu=10.0.0.8,1433");
+    expect(facts).toContain("A1");
+    expect(facts).toContain("MA-000010");
+    expect(facts).not.toMatch(/xai-/);
+    expect(done.outbound?.read?.databases).toEqual(["OFIS"]);
+    expect(done.outbound?.read?.companies).toEqual(["A1"]);
+    expect(done.outbound?.read?.vouchers[0]?.voucherNo).toBe("MA-000010");
+    expect(done.outbound?.modelNote).toBeUndefined();
+    expect(done.outbound?.note).toContain("xAI bu bilgisayarda çağrıldı");
+    expect(JSON.stringify(done.outbound)).not.toMatch(/MA-999999|Deneme|DENEME/);
+
+    const kept = await handleHubMessage(runtime, { type: "job.run", jobId: "job_2" }, {
+      servers: ["10.0.0.8,1433"],
+      log: () => {},
+      sql: port({
+        "master.master": [{ name: "OFIS" }],
+        "OFIS.SIRKET": [{ SIRKOD: "A1", SIRDBNAME: "ETA_A1_2026", SIRPATH: "" }],
+        "ETA_A1_2026.MUHFIS": [{ MUHFISREFNO: 2 }],
+        "ETA_A1_2026.MUHHAR": [{ MUHHARREFNO: 2 }],
+      }),
+      model: async () => "A1 fişi MA-000010 bu bilgisayarda.",
+    });
+    expect(kept.outbound?.modelNote).toBe("A1 fişi MA-000010 bu bilgisayarda.");
+    expect(kept.outbound?.read?.vouchers.map((row) => row.voucherNo)).toEqual(["MA-000010"]);
   });
 });

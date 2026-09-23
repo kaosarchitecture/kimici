@@ -4167,16 +4167,48 @@ function nextVoucherNo(snapshot) {
 
 // src/eta-session.ts
 var LOCAL_SQL_SERVERS = ["localhost", ".", "localhost\\SQLEXPRESS", ".\\SQLEXPRESS"];
-var DATABASE_QUERY = "SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name";
-var COMPANY_QUERY = "SELECT SIRKOD, SIRDBNAME, SIRPATH FROM SIRKET";
-var MASTER_NAMES = ["ETA_MASTER", "ETA_MASTERV11", "ETA_MASTERV8"];
-var TEMPLATE_QUERY = "SELECT TOP 1 MUHFISREFNO AS refNo FROM MUHFIS";
-var VOUCHER_QUERY = "SELECT TOP 5 MUHFISREFNO AS refNo, MUHFISNO AS voucherNo, MUHFISTAR AS voucherDate, MUHFISSEVNO AS versionNo, MUHFISBELTUR AS kind, MUHFISBORCTOP AS debit, MUHFISALACAKTOP AS credit FROM MUHFIS ORDER BY MUHFISREFNO DESC";
+var DATABASE_QUERY = "SELECT name FROM sys.databases WHERE database_id > 4 AND state = 0 ORDER BY name";
+var SCHEMA_QUERY = "SELECT TABLE_NAME AS tableName, COLUMN_NAME AS columnName FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME IN ('SIRKET', 'MUHFIS', 'MUHHAR')";
+var ETA_TABLES = ["SIRKET", "MUHFIS", "MUHHAR"];
+var SIRKET_COLUMNS = ["SIRKOD", "SIRDBNAME", "SIRPATH"];
+var HEADER_COLUMNS = [
+  ["MUHFISREFNO", "refNo"],
+  ["MUHFISNO", "voucherNo"],
+  ["MUHFISTAR", "voucherDate"],
+  ["MUHFISSEVNO", "versionNo"],
+  ["MUHFISBELTUR", "kind"],
+  ["MUHFISBORCTOP", "debit"],
+  ["MUHFISALACAKTOP", "credit"]
+];
+var LINE_COLUMNS = [
+  ["MUHHARREFNO", "refNo"],
+  ["MUHHARSIRANO", "seq"],
+  ["MUHHARMUHKOD", "account"],
+  ["MUHHARBATIPI", "side"],
+  ["MUHHARTUTAR", "amount"],
+  ["MUHHARACIKLAMA", "description"],
+  ["MUHHARTAR", "lineDate"]
+];
 var COMPANY_DB = /^[A-Za-z_][A-Za-z0-9_]*$/;
+var BUILDABLE_DB = /^ETA_[A-Z0-9]+_\d{4}$/;
 var COMPANY_CODE = /^[\p{L}\p{N}_.-]{1,40}$/u;
+var SERVER_NAME = /^(?:\(local\)|\.)(?:\\[\w.-]+)?(?:,\d{1,5})?$|^(?:tcp:)?[\w.-]+(?:\\[\w.-]+)?(?:,\d{1,5})?$/;
+function isSqlServerName(server) {
+  return SERVER_NAME.test(server);
+}
+function pathFacts(found) {
+  const vouchers = found.vouchers.slice(0, 5).map((voucher) => `${voucher.voucherNo} ${voucher.company} s\xFCr\xFCm ${voucher.version || "-"}`).join(", ");
+  return [
+    `sunucu=${found.server ?? "yok"}`,
+    `veritaban\u0131=${found.databases.join(", ") || "yok"}`,
+    `\u015Firket=${found.companies.join(", ") || "yok"}`,
+    `fi\u015F=${vouchers || "yok"}`,
+    `build=${found.build === "open" ? "a\xE7\u0131k" : "kapal\u0131"}`
+  ].join("\n");
+}
 function localConnectionString(server, database) {
-  if (!/^[\w.\\-]+$/.test(server)) throw new Error("SQL sunucu ad\u0131 ge\xE7ersiz.");
-  if (database !== "master" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(database)) {
+  if (!isSqlServerName(server)) throw new Error("SQL sunucu ad\u0131 ge\xE7ersiz.");
+  if (database !== "master" && !COMPANY_DB.test(database)) {
     throw new Error("Veritaban\u0131 ad\u0131 ge\xE7ersiz.");
   }
   const connectionString = `Server=${server};Database=${database};Integrated Security=True;TrustServerCertificate=True;Connect Timeout=3`;
@@ -4190,15 +4222,24 @@ function localConnectionString(server, database) {
 }
 async function readMachine(port, listDir = async () => [], servers = LOCAL_SQL_SERVERS, log = () => {
 }) {
+  const targets = servers.map((server) => server.trim()).filter(Boolean).slice(0, 8);
+  log(`SQL hedefleri: ${targets.join(", ") || "yok"}`);
   let fallback = null;
-  for (const server of servers) {
+  for (const server of targets) {
+    if (!isSqlServerName(server)) {
+      log(`${server} SQL hedefi olarak kullan\u0131lmad\u0131.`);
+      continue;
+    }
+    log(`${server} a\xE7\u0131l\u0131yor.`);
     let listed;
     try {
       listed = await port.query(server, "master", DATABASE_QUERY);
     } catch {
+      log(`${server} a\xE7\u0131lmad\u0131.`);
       continue;
     }
-    const databases = listed.map((row) => text(row, "name")).filter(Boolean).slice(0, 40);
+    const databases = listed.map((row) => text(row, "name")).filter((name) => COMPANY_DB.test(name)).slice(0, 40);
+    log(`${server} a\xE7\u0131ld\u0131. Veritaban\u0131: ${databases.join(", ") || "yok"}`);
     const seen = {
       sql: true,
       databases,
@@ -4209,74 +4250,61 @@ async function readMachine(port, listDir = async () => [], servers = LOCAL_SQL_S
       server,
       readyDatabases: []
     };
-    const master = MASTER_NAMES.find((name) => databases.includes(name));
-    if (!master) {
-      log(`${server}: ETA veritaban\u0131 yok. ${databases.join(", ") || "veritaban\u0131 yok"}`);
-      fallback ??= seen;
-      continue;
-    }
-    log(`${server}: ${master} bulundu.`);
-    const companies = await port.query(server, master, COMPANY_QUERY);
-    for (const row of companies) {
-      const code = text(row, "SIRKOD");
-      const database = text(row, "SIRDBNAME");
-      if (!COMPANY_CODE.test(code) || !COMPANY_DB.test(database)) continue;
-      seen.companies.push(code);
+    const schemas = /* @__PURE__ */ new Map();
+    for (const database of databases) await probe(port, server, database, schemas, log);
+    const companyOf = /* @__PURE__ */ new Map();
+    const follow = /* @__PURE__ */ new Set();
+    for (const [database, schema] of schemas) {
+      if (schema.has("MUHFIS")) follow.add(database);
+      if (!schema.has("SIRKET")) continue;
+      const columns = schema.get("SIRKET") ?? /* @__PURE__ */ new Set();
+      const fields = SIRKET_COLUMNS.filter((column) => columns.has(column));
+      if (fields.length === 0) continue;
+      let companies = [];
       try {
-        const template = await port.query(server, database, TEMPLATE_QUERY);
-        if (template.length > 0) seen.readyDatabases.push(database);
-        const vouchers = await port.query(server, database, VOUCHER_QUERY);
-        const drafts = [];
-        for (const voucher of vouchers) {
-          const voucherNo = text(voucher, "voucherNo");
-          if (!voucherNo) continue;
-          drafts.push({
-            refNo: finite(voucher.refNo),
-            voucher: {
-              company: code,
-              voucherNo,
-              date: text(voucher, "voucherDate").slice(0, 10),
-              debit: money(voucher.debit),
-              credit: money(voucher.credit),
-              version: text(voucher, "versionNo"),
-              kind: text(voucher, "kind"),
-              lines: []
-            }
-          });
-        }
-        const refs = drafts.map((item) => item.refNo).filter((ref) => ref > 0);
-        if (refs.length > 0) {
-          const lines = await port.query(server, database, lineQuery(refs));
-          for (const line of lines) {
-            const target = drafts.find((item) => item.refNo === finite(line.refNo));
-            if (!target || target.voucher.lines.length >= 40) continue;
-            target.voucher.lines.push({
-              seq: finite(line.seq),
-              account: text(line, "account"),
-              side: sideOf(line.side),
-              amount: money(line.amount),
-              description: text(line, "description"),
-              date: text(line, "lineDate").slice(0, 10)
-            });
-          }
-        }
-        seen.vouchers.push(...drafts.map((item) => item.voucher));
+        companies = await port.query(server, database, `SELECT ${fields.join(", ")} FROM SIRKET`);
       } catch {
+        log(`${server} / ${database}: \u015Firket listesi okunamad\u0131.`);
+        continue;
       }
-      const dir = text(row, "SIRPATH");
-      if (!/^[A-Za-z]:\\[^:*?"<>|]+$/.test(dir) || dir.includes("..")) continue;
-      try {
-        const names = await listDir(dir);
-        for (const name of names) {
-          if (!name || name.startsWith(".")) continue;
-          seen.files.push(name.slice(0, 120));
-          if (seen.files.length >= 20) break;
+      for (const row of companies) {
+        if (seen.companies.length >= 30) break;
+        const code = text(row, "SIRKOD");
+        const target = text(row, "SIRDBNAME");
+        if (COMPANY_CODE.test(code)) {
+          if (!seen.companies.includes(code)) seen.companies.push(code);
+          if (COMPANY_DB.test(target)) companyOf.set(target, code);
+          log(`\u015Eirket ${code}${COMPANY_DB.test(target) ? `, veritaban\u0131 ${target}` : ""}.`);
         }
-      } catch {
+        if (COMPANY_DB.test(target)) follow.add(target);
+        await readCompanyFiles(listDir, text(row, "SIRPATH"), seen);
       }
     }
+    for (const database of [...follow].slice(0, 20)) {
+      if (!schemas.has(database)) await probe(port, server, database, schemas, log);
+      const schema = schemas.get(database);
+      const columns = schema?.get("MUHFIS");
+      if (!columns) continue;
+      const company = companyOf.get(database) || database;
+      if (!seen.companies.includes(company) && COMPANY_CODE.test(company)) seen.companies.push(company);
+      try {
+        if (columns.has("MUHFISREFNO") && BUILDABLE_DB.test(database)) {
+          const template = await port.query(server, database, "SELECT TOP 1 MUHFISREFNO AS refNo FROM MUHFIS");
+          if (template.length > 0 && !seen.readyDatabases.includes(database)) seen.readyDatabases.push(database);
+        }
+        const vouchers = await readVoucherRows(port, server, database, columns, schema?.get("MUHHAR") ?? /* @__PURE__ */ new Set(), company);
+        if (vouchers.length > 0) log(`${database}: fi\u015F ${vouchers.length}.`);
+        seen.vouchers.push(...vouchers);
+      } catch {
+        log(`${database}: fi\u015F okunamad\u0131.`);
+      }
+      if (seen.vouchers.length >= 20) break;
+    }
+    seen.vouchers = seen.vouchers.slice(0, 20);
     seen.build = seen.readyDatabases.length > 0 ? "open" : "closed";
-    return seen;
+    if (seen.companies.length > 0 || seen.vouchers.length > 0) return seen;
+    log(`${server}: ETA tablosu yok.`);
+    fallback ??= seen;
   }
   return fallback ?? { sql: false, databases: [], companies: [], vouchers: [], files: [], build: "closed", server: null, readyDatabases: [] };
 }
@@ -4287,9 +4315,93 @@ function etaNote(access) {
   const build = access.build === "open" ? "Build a\xE7\u0131k." : "Build kapal\u0131.";
   return `Windows oturumuyla okundu. Veritaban\u0131: ${databases}. \u015Eirket: ${access.companies.join(", ")}. Fi\u015F: ${access.vouchers.length}. ${build}`;
 }
-function lineQuery(refs) {
+async function probe(port, server, database, schemas, log) {
+  if (schemas.has(database) || !COMPANY_DB.test(database)) return;
+  try {
+    const rows = await port.query(server, database, SCHEMA_QUERY);
+    const tables = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      const table = (text(row, "tableName") || text(row, "TABLE_NAME")).toUpperCase();
+      const column = (text(row, "columnName") || text(row, "COLUMN_NAME")).toUpperCase();
+      if (!ETA_TABLES.includes(table)) continue;
+      if (!/^[A-Z0-9_]+$/.test(column)) continue;
+      const columns = tables.get(table) ?? /* @__PURE__ */ new Set();
+      columns.add(column);
+      tables.set(table, columns);
+    }
+    schemas.set(database, tables);
+    const found = [...tables.keys()];
+    if (found.length > 0) log(`${server} / ${database}: ${found.join(", ")}`);
+  } catch {
+    schemas.set(database, /* @__PURE__ */ new Map());
+    log(`${server} / ${database}: okunamad\u0131.`);
+  }
+}
+async function readVoucherRows(port, server, database, columns, lineColumns, company) {
+  const fields = HEADER_COLUMNS.filter(([column]) => columns.has(column));
+  if (!fields.some(([column]) => column === "MUHFISNO")) return [];
+  const order = columns.has("MUHFISREFNO") ? " ORDER BY MUHFISREFNO DESC" : "";
+  const listed = await port.query(
+    server,
+    database,
+    `SELECT TOP 5 ${fields.map(([column, alias]) => `${column} AS ${alias}`).join(", ")} FROM MUHFIS${order}`
+  );
+  const drafts = [];
+  for (const voucher of listed) {
+    const voucherNo = text(voucher, "voucherNo");
+    if (!voucherNo) continue;
+    drafts.push({
+      refNo: finite(voucher.refNo),
+      voucher: {
+        company,
+        voucherNo,
+        date: text(voucher, "voucherDate").slice(0, 10),
+        debit: money(voucher.debit),
+        credit: money(voucher.credit),
+        version: text(voucher, "versionNo"),
+        kind: text(voucher, "kind"),
+        lines: []
+      }
+    });
+  }
+  const refs = drafts.map((item) => item.refNo).filter((ref) => ref > 0);
+  const statement = lineQuery(refs, lineColumns);
+  if (statement) {
+    const lines = await port.query(server, database, statement);
+    for (const line of lines) {
+      const target = drafts.find((item) => item.refNo === finite(line.refNo));
+      if (!target || target.voucher.lines.length >= 40) continue;
+      target.voucher.lines.push({
+        seq: finite(line.seq),
+        account: text(line, "account"),
+        side: sideOf(line.side),
+        amount: money(line.amount),
+        description: text(line, "description"),
+        date: text(line, "lineDate").slice(0, 10)
+      });
+    }
+  }
+  return drafts.map((item) => item.voucher);
+}
+function lineQuery(refs, columns) {
+  if (!columns.has("MUHHARREFNO")) return "";
   const list = refs.filter((ref) => Number.isInteger(ref) && ref > 0).join(",");
-  return `SELECT MUHHARREFNO AS refNo, MUHHARSIRANO AS seq, MUHHARMUHKOD AS account, MUHHARBATIPI AS side, MUHHARTUTAR AS amount, MUHHARACIKLAMA AS description, MUHHARTAR AS lineDate FROM MUHHAR WHERE MUHHARREFNO IN (${list}) ORDER BY MUHHARREFNO, MUHHARSIRANO`;
+  if (!list) return "";
+  const fields = LINE_COLUMNS.filter(([column]) => columns.has(column));
+  const order = columns.has("MUHHARSIRANO") ? " ORDER BY MUHHARREFNO, MUHHARSIRANO" : " ORDER BY MUHHARREFNO";
+  return `SELECT ${fields.map(([column, alias]) => `${column} AS ${alias}`).join(", ")} FROM MUHHAR WHERE MUHHARREFNO IN (${list})${order}`;
+}
+async function readCompanyFiles(listDir, dir, seen) {
+  if (!/^[A-Za-z]:\\[^:*?"<>|]+$/.test(dir) || dir.includes("..") || seen.files.length >= 20) return;
+  try {
+    const names = await listDir(dir);
+    for (const name of names) {
+      if (!name || name.startsWith(".")) continue;
+      seen.files.push(name.slice(0, 120));
+      if (seen.files.length >= 20) break;
+    }
+  } catch {
+  }
 }
 function sideOf(value) {
   const number = typeof value === "number" ? value : Number(value);
@@ -4359,6 +4471,207 @@ async function listLocalDir(dir) {
   if (process.platform !== "win32") return [];
   const names = await readdir(dir);
   return names.slice(0, 20);
+}
+
+// src/local-model.ts
+import { readFile } from "node:fs/promises";
+
+// ../../packages/consent-view/src/xai-env.ts
+var WINDOWS_XAI_ENV = "C:\\DENK\\secrets\\xai.env";
+var SKIP = /imagine|image|video|tts|voice|whisper|embed|vision|audio|multi-agent/i;
+function isChatGrok(id) {
+  const name = id.trim();
+  if (!/^grok-\d/i.test(name)) return false;
+  return !SKIP.test(name);
+}
+function grokVersion(id) {
+  const match = /^grok-(\d+)(?:\.(\d+))?(?:\.(\d+))?/i.exec(id.trim());
+  if (!match) return [0, 0, 0, 0];
+  const extra = id.includes("-") && id.replace(/^grok-[\d.]+/i, "") ? 0 : 1;
+  return [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0), extra];
+}
+function sortGrokNewest(ids) {
+  return [...new Set(ids.map((id) => id.trim()).filter(isChatGrok))].sort((a, b) => {
+    const av = grokVersion(a);
+    const bv = grokVersion(b);
+    for (let i = 0; i < av.length; i += 1) {
+      if (bv[i] !== av[i]) return (bv[i] ?? 0) - (av[i] ?? 0);
+    }
+    return a.length - b.length;
+  });
+}
+function collectGrokTokens(raw) {
+  return raw.split(/[,;\s]+/).map((part) => part.trim()).filter(isChatGrok);
+}
+function parseXaiEnv(text2) {
+  const models = [];
+  const apiKeys = [];
+  let apiKey = "";
+  let preferred = "";
+  for (const rawLine of text2.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) {
+      models.push(...collectGrokTokens(line));
+      continue;
+    }
+    const key = line.slice(0, eq).trim().replace(/^export\s+/, "");
+    let value = line.slice(eq + 1).trim();
+    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+      value = value.slice(1, -1);
+    }
+    if (/^(XAI_API_KEY_\d+|XAI_API_KEY|XAI_KEY|GROK_API_KEY)$/i.test(key)) {
+      if (value) apiKeys.push(value);
+      if (/^(XAI_API_KEY|XAI_KEY|GROK_API_KEY)$/i.test(key) && value) apiKey = value;
+      continue;
+    }
+    if (/^(XAI_MODEL|GROK_MODEL|MODEL)$/i.test(key)) {
+      preferred = value;
+      models.push(...collectGrokTokens(value));
+      continue;
+    }
+    if (/^(XAI_MODELS|GROK_MODELS|MODELS)$/i.test(key)) {
+      models.push(...collectGrokTokens(value));
+    }
+  }
+  const uniqueKeys = [...new Set(apiKeys.filter(Boolean))];
+  return {
+    apiKey: apiKey || uniqueKeys[0] || "",
+    apiKeys: uniqueKeys,
+    models: sortGrokNewest(models),
+    preferred: preferred && isChatGrok(preferred) ? preferred : ""
+  };
+}
+function defaultXaiEnvPath(platform = process.platform, override = process.env.XAI_ENV_FILE) {
+  if (override) return override;
+  return platform === "win32" ? WINDOWS_XAI_ENV : "";
+}
+
+// ../../packages/consent-view/src/ai.ts
+var DEFAULT_XAI_MODEL = "grok-4.20-0309-reasoning";
+var XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions";
+var SYSTEM_PROMPT = [
+  "Sen DENK AI\u2019s\u0131n. \u0130\u015Fin evrak ve muhasebe fi\u015Fi: oku, de\u011Ferlendir, sat\u0131rlar\u0131 kur, i\u015Fle.",
+  "Y\xFCklenen evrak\u0131n \xE7\u0131kar\u0131lan alanlar\u0131n\u0131 ve kurulan fi\u015F sat\u0131rlar\u0131n\u0131 g\xF6r\xFCrs\xFCn.",
+  "Tutar\u0131 evraktan al; yoksa yok de, uydurma.",
+  "Kanonik yaz\u0131m: KDV a\xE7\u0131klamas\u0131 \u0130ND.KDV. (noktas\u0131z, bo\u015Fluksuz). Nakit kapan\u0131\u015F 100 01.",
+  "Al\u0131\u015F faturas\u0131: 770 bor\xE7 (gider), 191 02 20 \u0130ND.KDV. bor\xE7, 320 alacak (N.FT \u0130LE ALI\u015E).",
+  "Cevab\u0131nda fi\u015Fi de\u011Ferlendir: hesap, B/A, tutar, a\xE7\u0131klama, eksik veya tutars\u0131z sat\u0131r.",
+  "T\xFCrk\xE7e, somut, fi\u015F dili. \u0130\u015Fini yap."
+].join(" ");
+function xaiChatBody(messages, model = DEFAULT_XAI_MODEL) {
+  return { model, messages };
+}
+function textFromContent(content) {
+  if (typeof content === "string" && content.trim()) return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content.map((part) => {
+    if (typeof part === "string") return part;
+    if (part && typeof part === "object" && "text" in part) return String(part.text ?? "");
+    return "";
+  }).join("").trim();
+}
+function extractModelText(result) {
+  if (typeof result === "string" && result.trim()) return result.trim();
+  if (!result || typeof result !== "object") return "";
+  const row = result;
+  if (Array.isArray(row.choices) && row.choices[0] && typeof row.choices[0] === "object") {
+    const choice = row.choices[0];
+    const message = choice.message;
+    if (message && typeof message === "object") {
+      const fromMsg = textFromContent(message.content);
+      if (fromMsg) return fromMsg;
+    }
+    const fromText = textFromContent(choice.text);
+    if (fromText) return fromText;
+  }
+  for (const key of ["response", "result", "output_text", "text"]) {
+    if (typeof row[key] === "string" && String(row[key]).trim()) return String(row[key]).trim();
+  }
+  if (row.result && typeof row.result === "object") return extractModelText(row.result);
+  return "";
+}
+async function runXaiChat(apiKey, messages, model = DEFAULT_XAI_MODEL) {
+  const res = await fetch(XAI_CHAT_URL, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(xaiChatBody(messages, model)),
+    signal: AbortSignal.timeout(25e3)
+  });
+  const payload = await res.json();
+  if (!res.ok) {
+    throw new Error(payload.error?.message ?? `xAI HTTP ${res.status}`);
+  }
+  const reply = extractModelText(payload);
+  if (!reply) throw new Error(`${model} bo\u015F cevap verdi.`);
+  return reply;
+}
+
+// src/local-model.ts
+var PATH_SYSTEM = [
+  "Bu Windows bilgisayar\u0131nda \xE7al\u0131\u015Fan DENK ajan\u0131s\u0131n.",
+  "Sana yaln\u0131z bu makinede a\xE7\u0131lan SQL hedefleri ve bulunan kay\u0131tlar verilir.",
+  "Listede olmayan sunucu, \u015Firket, fi\u015F numaras\u0131 veya tutar yazma.",
+  "K\u0131sa T\xFCrk\xE7e s\xF6yle: SQL a\xE7\u0131ld\u0131 m\u0131, \u015Firket kodu ne, fi\u015F okundu mu."
+].join(" ");
+var ALLOWED = /* @__PURE__ */ new Set(["SQL", "ETA", "WINDOWS", "XAI", "DENK"]);
+function acceptModelNote(reply, facts) {
+  const clean = reply.replace(/\s+/g, " ").trim();
+  if (!clean) return null;
+  if (/deneme|password|parola|api[_-]?key|xai-[a-z0-9]|integrated security/i.test(clean)) return null;
+  const factsUpper = facts.toLocaleUpperCase("tr-TR");
+  const tokens = clean.match(/[A-Za-zÇĞİÖŞÜçğıöşü0-9]+(?:[-_][A-Za-z0-9]+)*/g) ?? [];
+  for (const token of tokens) {
+    const upper = token.toLocaleUpperCase("tr-TR");
+    const looksLikeId = /\d/.test(token) || upper === token && token.length >= 3;
+    if (!looksLikeId || ALLOWED.has(upper)) continue;
+    if (!factsUpper.includes(upper)) return null;
+  }
+  return clean.slice(0, 400);
+}
+async function localModelNote(pack, facts, io = {}) {
+  const log = io.log ?? (() => {
+  });
+  const creds = await localCreds(pack.modelHint, io.readText);
+  if (!creds) {
+    log("xAI anahtar\u0131 bu bilgisayarda yok. Okunan kay\u0131t duruyor.");
+    return { called: false, text: null };
+  }
+  log("xAI bu bilgisayarda a\xE7\u0131l\u0131yor.");
+  const messages = [
+    { role: "system", content: PATH_SYSTEM },
+    { role: "user", content: facts }
+  ];
+  try {
+    const chat = io.chat ?? runXaiChat;
+    const text2 = await chat(creds.key, messages, creds.model);
+    log("xAI cevap verdi.");
+    return { called: true, text: text2 };
+  } catch {
+    log("xAI cevap vermedi.");
+    return { called: true, text: null };
+  }
+}
+async function localCreds(fallbackModel, readText) {
+  const envKey = process.env.XAI_API_KEY?.trim();
+  if (envKey) return { key: envKey, model: process.env.XAI_MODEL?.trim() || fallbackModel || DEFAULT_XAI_MODEL };
+  const read = readText ?? readDefaultEnv;
+  try {
+    const parsed = parseXaiEnv(await read());
+    if (!parsed.apiKey) return null;
+    return { key: parsed.apiKey, model: parsed.preferred || process.env.XAI_MODEL?.trim() || fallbackModel || DEFAULT_XAI_MODEL };
+  } catch {
+    return null;
+  }
+}
+async function readDefaultEnv() {
+  const path = defaultXaiEnvPath();
+  if (!path) throw new Error("xai.env yok.");
+  return readFile(path, "utf8");
 }
 
 // src/windows-sql.ts
@@ -4487,24 +4800,68 @@ if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) { 'yes' } else { 'no' 
 
 // src/windows-sql.ts
 var execFileAsync2 = promisify2(execFile2);
+function sqlTargetsFromNames(names) {
+  const out = [];
+  for (const name of names) {
+    const server = String(name).trim().replace(/\s*,\s*/g, ",");
+    if (!isSqlServerName(server) || out.includes(server)) continue;
+    out.push(server);
+    if (out.length >= 8) break;
+  }
+  return out.length > 0 ? out : ["localhost"];
+}
 async function listLocalSqlServers() {
   if (process.platform !== "win32") return [...LOCAL_SQL_SERVERS];
   const script = `
 $servers = New-Object System.Collections.Generic.List[string]
-$servers.Add('localhost')
-$paths = @(
-  'HKLM:\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL',
-  'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL'
+function Add-Name([string]$value) {
+  if ([string]::IsNullOrWhiteSpace($value)) { return }
+  [void]$servers.Add($value.Trim())
+}
+$odbcRoots = @(
+  'HKLM:\\SOFTWARE\\ODBC\\ODBC.INI',
+  'HKLM:\\SOFTWARE\\WOW6432Node\\ODBC\\ODBC.INI',
+  'HKCU:\\SOFTWARE\\ODBC\\ODBC.INI',
+  'HKCU:\\SOFTWARE\\WOW6432Node\\ODBC\\ODBC.INI'
 )
-foreach ($path in $paths) {
+foreach ($root in $odbcRoots) {
+  if (-not (Test-Path $root)) { continue }
+  foreach ($item in (Get-ChildItem $root -ErrorAction SilentlyContinue)) {
+    $prop = Get-ItemProperty -LiteralPath $item.PSPath -ErrorAction SilentlyContinue
+    if (-not $prop) { continue }
+    foreach ($field in @('Server','SERVER','Address')) {
+      $value = $prop.$field
+      if ($value) { Add-Name ([string]$value) }
+    }
+  }
+}
+$aliasPaths = @(
+  'HKLM:\\SOFTWARE\\Microsoft\\MSSQLServer\\Client\\ConnectTo',
+  'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\MSSQLServer\\Client\\ConnectTo',
+  'HKCU:\\SOFTWARE\\Microsoft\\MSSQLServer\\Client\\ConnectTo'
+)
+foreach ($path in $aliasPaths) {
   if (-not (Test-Path $path)) { continue }
   $props = Get-ItemProperty $path
   foreach ($name in $props.PSObject.Properties.Name) {
-    if ($name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
-    if ($name -eq 'MSSQLSERVER') { [void]$servers.Add('localhost') }
-    else { [void]$servers.Add(('localhost\\' + $name)) }
+    if ($name -like 'PS*') { continue }
+    Add-Name $name
   }
 }
+$instancePaths = @(
+  'HKLM:\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL',
+  'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL'
+)
+foreach ($path in $instancePaths) {
+  if (-not (Test-Path $path)) { continue }
+  $props = Get-ItemProperty $path
+  foreach ($name in $props.PSObject.Properties.Name) {
+    if ($name -like 'PS*') { continue }
+    if ($name -eq 'MSSQLSERVER') { Add-Name 'localhost' }
+    else { Add-Name ('localhost\\' + $name) }
+  }
+}
+Add-Name 'localhost'
 @($servers | Select-Object -Unique) | ConvertTo-Json -Compress
 `;
   try {
@@ -4514,8 +4871,7 @@ foreach ($path in $paths) {
     });
     const parsed = JSON.parse(stdout.trim() || "[]");
     const names = (Array.isArray(parsed) ? parsed : [parsed]).map((item) => String(item));
-    const safe = names.filter((name) => /^[\w.\\-]+$/.test(name));
-    return safe.length > 0 ? safe : ["localhost"];
+    return sqlTargetsFromNames(names);
   } catch {
     return ["localhost"];
   }
@@ -4538,6 +4894,7 @@ $connection = New-Object System.Data.SqlClient.SqlConnection ${psSingleQuoted2(c
 $connection.Open()
 try {
   $command = $connection.CreateCommand()
+  $command.CommandTimeout = 8
   $command.CommandText = ${psSingleQuoted2(statement)}
   $reader = $command.ExecuteReader()
   $rows = @()
@@ -4559,7 +4916,7 @@ try {
   try {
     const result = await execFileAsync2("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
       windowsHide: true,
-      timeout: 2e4
+      timeout: 12e3
     });
     stdout = result.stdout;
   } catch (error) {
@@ -4601,20 +4958,24 @@ async function handleHubMessage(runtime, message, io = {}) {
     return { runtime, outbound: failed(runtime, message.jobId, "Kural paketi bu ba\u011Flant\u0131da yok.") };
   }
   const port = io.sql ?? windowsSqlPort();
+  const log = io.log ?? ((line) => console.log(line));
   let access;
   let read;
   let server = null;
   let readyDatabases = [];
+  let facts = "";
   try {
+    log("Bu bilgisayarda SQL ve ETA aran\u0131yor.");
     const servers = io.servers ?? await listLocalSqlServers();
-    const found = await readMachine(port, io.listDir ?? listLocalDir, servers, io.log ?? ((line) => console.log(line)));
+    const found = await readMachine(port, io.listDir ?? listLocalDir, servers, log);
     access = { sql: found.sql, companies: found.companies, build: found.build };
     read = { databases: found.databases, companies: found.companies, vouchers: found.vouchers, files: found.files };
     server = found.server;
     readyDatabases = found.readyDatabases;
+    facts = pathFacts(found);
   } catch (error) {
-    const note = error instanceof Error ? error.message : "Bu bilgisayarda SQL a\xE7\u0131lmad\u0131.";
-    return { runtime: { ...runtime, build: void 0 }, outbound: failed(runtime, message.jobId, note) };
+    const note2 = error instanceof Error ? error.message : "Bu bilgisayarda SQL a\xE7\u0131lmad\u0131.";
+    return { runtime: { ...runtime, build: void 0 }, outbound: failed(runtime, message.jobId, note2) };
   }
   const next = {
     ...runtime,
@@ -4626,6 +4987,17 @@ async function handleHubMessage(runtime, message, io = {}) {
     } : void 0
   };
   const status = access.sql && access.companies.length > 0 ? "done" : "empty";
+  let note = etaNote({ ...access, ...read, server, readyDatabases });
+  let modelNote;
+  try {
+    const asked = io.model ? { called: true, text: await io.model(facts) } : await localModelNote(runtime.pack, facts, { log });
+    const accepted = asked.text ? acceptModelNote(asked.text, facts) : null;
+    if (accepted) modelNote = accepted;
+    else if (asked.called && asked.text) log("xAI cevab\u0131 okunan kayda uymad\u0131.");
+    if (asked.called && !modelNote) note = `${note} xAI bu bilgisayarda \xE7a\u011Fr\u0131ld\u0131.`;
+  } catch {
+    log("xAI cevap vermedi.");
+  }
   return {
     runtime: next,
     outbound: {
@@ -4633,7 +5005,8 @@ async function handleHubMessage(runtime, message, io = {}) {
       jobId: message.jobId,
       machineId: runtime.machineId,
       status,
-      note: etaNote({ ...access, ...read, server, readyDatabases }),
+      note: note.slice(0, 500),
+      modelNote,
       vouchers: [],
       eta: access,
       read

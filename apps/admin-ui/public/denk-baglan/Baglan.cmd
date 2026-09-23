@@ -15,6 +15,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo Windows oturumu sorulacak. SQL ve ETA varsa o oturumla girilir.
+echo Windows oturumu sorulacak. Bu bilgisayar SQL ve ETA yolunu arar.
+echo xAI anahtari yalniz C:\DENK\secrets\xai.env dosyasindan okunur.
 node "C:\DENK\agent\agent.mjs"
 pause

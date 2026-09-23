@@ -104,6 +104,7 @@ export async function runXaiChat(
       "content-type": "application/json",
     },
     body: JSON.stringify(xaiChatBody(messages, model)),
+    signal: AbortSignal.timeout(25_000),
   });
   const payload = (await res.json()) as { error?: { message?: string } };
   if (!res.ok) {

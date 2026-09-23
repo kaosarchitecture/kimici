@@ -2,8 +2,9 @@ import type { AgentResultMessage } from "../../../packages/consent-view/src/desk
 import type { KnowledgePack } from "../../../packages/consent-view/src/knowledge.ts";
 import type { BuiltVoucher } from "../../../packages/eta-core/src/writer.ts";
 import type { VoucherPlan } from "../../../packages/eta-core/src/types.ts";
-import { buildFromTemplate, etaNote, readMachine, type EtaAccess, type LocalRead, type SqlPort } from "./eta-session.ts";
+import { buildFromTemplate, etaNote, pathFacts, readMachine, type EtaAccess, type LocalRead, type SqlPort } from "./eta-session.ts";
 import { listLocalDir } from "./local-dir.ts";
+import { acceptModelNote, localModelNote } from "./local-model.ts";
 import { listLocalSqlServers, windowsSqlPort } from "./windows-sql.ts";
 
 export interface AgentRuntime {
@@ -27,6 +28,7 @@ export async function handleHubMessage(
     listDir?: (dir: string) => Promise<string[]>;
     servers?: readonly string[];
     log?: (line: string) => void;
+    model?: (facts: string) => Promise<string | null>;
   } = {},
 ): Promise<{ runtime: AgentRuntime; outbound: AgentResultMessage | null }> {
   if (message.type === "rules" && message.pack?.version) {
@@ -40,17 +42,21 @@ export async function handleHubMessage(
   }
 
   const port = io.sql ?? windowsSqlPort();
+  const log = io.log ?? ((line: string) => console.log(line));
   let access: EtaAccess;
   let read: LocalRead;
   let server: string | null = null;
   let readyDatabases: string[] = [];
+  let facts = "";
   try {
+    log("Bu bilgisayarda SQL ve ETA aranıyor.");
     const servers = io.servers ?? (await listLocalSqlServers());
-    const found = await readMachine(port, io.listDir ?? listLocalDir, servers, io.log ?? ((line) => console.log(line)));
+    const found = await readMachine(port, io.listDir ?? listLocalDir, servers, log);
     access = { sql: found.sql, companies: found.companies, build: found.build };
     read = { databases: found.databases, companies: found.companies, vouchers: found.vouchers, files: found.files };
     server = found.server;
     readyDatabases = found.readyDatabases;
+    facts = pathFacts(found);
   } catch (error) {
     const note = error instanceof Error ? error.message : "Bu bilgisayarda SQL açılmadı.";
     return { runtime: { ...runtime, build: undefined }, outbound: failed(runtime, message.jobId, note) };
@@ -69,6 +75,19 @@ export async function handleHubMessage(
         : undefined,
   };
   const status = access.sql && access.companies.length > 0 ? "done" : "empty";
+  let note = etaNote({ ...access, ...read, server, readyDatabases });
+  let modelNote: string | undefined;
+  try {
+    const asked = io.model
+      ? { called: true, text: await io.model(facts) }
+      : await localModelNote(runtime.pack, facts, { log });
+    const accepted = asked.text ? acceptModelNote(asked.text, facts) : null;
+    if (accepted) modelNote = accepted;
+    else if (asked.called && asked.text) log("xAI cevabı okunan kayda uymadı.");
+    if (asked.called && !modelNote) note = `${note} xAI bu bilgisayarda çağrıldı.`;
+  } catch {
+    log("xAI cevap vermedi.");
+  }
   return {
     runtime: next,
     outbound: {
@@ -76,7 +95,8 @@ export async function handleHubMessage(
       jobId: message.jobId,
       machineId: runtime.machineId,
       status,
-      note: etaNote({ ...access, ...read, server, readyDatabases }),
+      note: note.slice(0, 500),
+      modelNote,
       vouchers: [],
       eta: access,
       read,

@@ -66,7 +66,7 @@ export function Desk() {
         <a className="as-btn" href="/denk-baglan/Baglan.cmd" download="Baglan.cmd">
           Bu bilgisayarı bağla
         </a>
-        <p className="lede">Bir kez çalıştır. Windows onayı o bilgisayarda sorulur. Okunan fişler burada açılır.</p>
+        <p className="lede">Bir kez çalıştır. Windows onayı o bilgisayarda sorulur. Ajan SQL ve ETA yolunu arar, xAI o bilgisayardaki anahtarla cevaplar.</p>
         {desk && desk.machines.length === 0 ? <p className="empty">Bağlı bilgisayar yok.</p> : null}
         <div className="machines">
           {desk?.machines.map((row) => (
@@ -146,6 +146,7 @@ function MachineResult(props: { machine: MachineView; rulesVersion: string; busy
           {job.read.files.length > 0 ? <p className="lede">{job.read.files.join(", ")}</p> : null}
         </>
       ) : null}
+      {job?.modelNote ? <p className="lede">xAI: {job.modelNote}</p> : null}
       <p className="lede">{job?.note ?? "Windows onayı gelince bu bilgisayardan okunan fişler burada açılır."}</p>
       <div className="row">
         <button type="button" disabled={props.busy || !props.machine.online || !job?.windowsAccount} onClick={props.onRun}>

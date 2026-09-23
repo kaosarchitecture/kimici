@@ -52,6 +52,7 @@ describe("connected computers", () => {
       machineId: "pc-a",
       status: "done",
       note: "Windows oturumuyla okundu.",
+      modelNote: "A fişi MA-000001 bu bilgisayarda.",
       vouchers: [voucher("A-1")],
       read: {
         databases: ["ETA_MASTERV8"],
@@ -72,6 +73,7 @@ describe("connected computers", () => {
 
     expect(done.jobs[hello.job.jobId]?.vouchers).toEqual([]);
     expect(done.jobs[hello.job.jobId]?.read?.vouchers[0]?.voucherNo).toBe("MA-000001");
+    expect(done.jobs[hello.job.jobId]?.modelNote).toBe("A fişi MA-000001 bu bilgisayarda.");
     expect(done.jobs[other.job.jobId]?.read).toBeUndefined();
     expect(done.lastByMachine["pc-b"]).toBe(other.job.jobId);
   });
