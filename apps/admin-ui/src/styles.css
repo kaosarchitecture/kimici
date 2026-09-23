@@ -77,8 +77,7 @@ body {
 .brand-by {
   margin: 0;
   font-size: 0.68rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: #8b93a1;
 }
 .nav { display: flex; flex-direction: column; gap: 0.25rem; }
