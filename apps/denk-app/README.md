@@ -1,21 +1,20 @@
 # denk-app (Cloudflare Worker)
 
-Evrak yükleme + Workers AI + fiş yazdır. **denk-central** ve **denkmuhasebe.com** değildir.
+Evrak yükleme + Grok 4.5 + fiş yazdır. **denk-central** ve **denkmuhasebe.com** değildir.
 
-## AI nerede, nasıl bağlanır?
+## Model
 
-Tarayıcı modele gitmez. Akış:
+**Grok 4.5** (`grok-4.5` / Cloudflare id `xai/grok-4.5`). Llama bağlı değil.
 
-1. Kullanıcı evrakı `POST /api/evrak` ile **denk-app** Worker’a yükler.
-2. Kullanıcı yazınca tarayıcı `POST /api/ai` çağırır (metin + evrak özeti).
-3. Worker `env.AI.run("@cf/meta/llama-3.1-8b-instruct")` ile **Cloudflare Workers AI** çalıştırır.
-4. Cevap aynı Worker’dan UI’ye döner.
+```
+Tarayıcı → POST /api/ai → denk-app
+  1) XAI_API_KEY varsa → https://api.x.ai/v1/chat/completions  model=grok-4.5
+  2) yoksa → env.AI.run("xai/grok-4.5", …, { gateway: { id: "default" } })
+```
 
-Müşteri Windows’una, ETA SQL’ine veya `denk-central`’a bağlanılmaz. API anahtarı koda yazılmaz; binding `wrangler.jsonc` içinde `ai.binding = "AI"`.
+Anahtar koda yazılmaz: `npx wrangler secret put XAI_API_KEY`. Müşteri makinesine gidilmez.
 
 ```bash
 cd ../admin-ui && npm run build
 cd ../denk-app && npx wrangler deploy
 ```
-
-Yalnız `denk-app.<hesap>.workers.dev`. Ana site route’u eklenmez.

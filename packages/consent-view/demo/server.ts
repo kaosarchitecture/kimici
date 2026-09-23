@@ -2,7 +2,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildChatMessages, extractModelText, WORKERS_AI_MODEL } from "../src/ai.ts";
+import {
+  buildChatMessages,
+  CF_GROK_MODEL,
+  extractModelText,
+  runXaiChat,
+  XAI_MODEL,
+  type ChatMessage,
+} from "../src/ai.ts";
 import { documentFromFile, type UploadedDocument } from "../src/ubl.ts";
 
 const MAX_EVRAK = 5 * 1024 * 1024;
@@ -10,6 +17,7 @@ let lastEvrak: UploadedDocument | null = null;
 
 const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
 const PORT = Number(process.env.PORT ?? 8788);
+const XAI_KEY = process.env.XAI_API_KEY ?? "";
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? "";
 
@@ -40,33 +48,31 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-async function runWorkersAi(messages: ReturnType<typeof buildChatMessages>): Promise<string> {
-  if (!ACCOUNT || !TOKEN) {
-    throw new Error(
-      "Workers AI bağlı değil. denk-app Worker’ını Cloudflare’e yükleyin (wrangler deploy). Binding: env.AI → " +
-        WORKERS_AI_MODEL +
-        ". Yerel deneme için CLOUDFLARE_ACCOUNT_ID ve CLOUDFLARE_API_TOKEN ortam değişkeni gerekir; koda yazılmaz.",
-    );
-  }
-  const res = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${WORKERS_AI_MODEL}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${TOKEN}`,
-        "content-type": "application/json",
+async function runGrok(messages: ChatMessage[]): Promise<{ reply: string; via: string }> {
+  if (XAI_KEY) return { reply: await runXaiChat(XAI_KEY, messages), via: "xai-rest" };
+  if (ACCOUNT && TOKEN) {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ model: CF_GROK_MODEL, messages }),
       },
-      body: JSON.stringify({ messages }),
-    },
-  );
-  const payload = (await res.json()) as { result?: unknown; errors?: Array<{ message?: string }> };
-  if (!res.ok) {
-    const hint = payload.errors?.[0]?.message ?? `HTTP ${res.status}`;
-    throw new Error(`Workers AI cevap vermedi: ${hint}`);
+    );
+    const payload = (await res.json()) as { result?: unknown; errors?: Array<{ message?: string }> };
+    if (!res.ok) {
+      throw new Error(payload.errors?.[0]?.message ?? `Cloudflare AI HTTP ${res.status}`);
+    }
+    const reply = extractModelText(payload.result ?? payload);
+    if (!reply) throw new Error("Grok 4.5 boş cevap verdi.");
+    return { reply, via: "ai-gateway" };
   }
-  const reply = extractModelText(payload.result ?? payload);
-  if (!reply) throw new Error("Model boş cevap verdi.");
-  return reply;
+  throw new Error(
+    "Grok 4.5 bağlı değil. denk-app’i wrangler deploy edin (env.AI → xai/grok-4.5) veya XAI_API_KEY ortam değişkeni koyun; anahtar koda yazılmaz.",
+  );
 }
 
 const server = createServer(async (req, res) => {
@@ -82,19 +88,20 @@ const server = createServer(async (req, res) => {
     }
 
     if (method === "GET" && url.pathname === "/api/ai") {
+      const connected = Boolean(XAI_KEY || (ACCOUNT && TOKEN));
       return json(res, 200, {
-        connected: Boolean(ACCOUNT && TOKEN),
-        model: WORKERS_AI_MODEL,
-        via: ACCOUNT && TOKEN ? "workers-ai-rest" : "disconnected",
-        where: "denk-app Worker · Cloudflare Workers AI · müşteri makinesine gitmez",
+        connected,
+        model: XAI_MODEL,
+        via: XAI_KEY ? "xai-rest" : ACCOUNT && TOKEN ? "ai-gateway" : "disconnected",
+        where: "denk-app Worker · Grok 4.5 · müşteri makinesine gitmez",
       });
     }
 
     if (method === "POST" && url.pathname === "/api/ai") {
       const body = (await readBody(req)) as { message?: string; document?: UploadedDocument | null };
       const doc = body.document?.fileName ? body.document : lastEvrak;
-      const reply = await runWorkersAi(buildChatMessages(body.message ?? "", doc));
-      return json(res, 200, { reply, model: WORKERS_AI_MODEL, via: "workers-ai-rest" });
+      const { reply, via } = await runGrok(buildChatMessages(body.message ?? "", doc));
+      return json(res, 200, { reply, model: XAI_MODEL, via });
     }
 
     if (method === "GET" && url.pathname === "/api/evrak") {
@@ -144,8 +151,8 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`DENK: http://0.0.0.0:${PORT}`);
   console.log(
-    ACCOUNT && TOKEN
-      ? `AI: Workers AI REST ${WORKERS_AI_MODEL}`
-      : `AI bağlı değil — wrangler deploy ile denk-app + env.AI`,
+    XAI_KEY || (ACCOUNT && TOKEN)
+      ? `AI: Grok 4.5 (${XAI_KEY ? "xai-rest" : "ai-gateway"})`
+      : "Grok 4.5 bağlı değil — wrangler deploy veya XAI_API_KEY",
   );
 });

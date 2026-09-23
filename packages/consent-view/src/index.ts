@@ -1,9 +1,13 @@
 export {
   buildChatMessages,
+  CF_GROK_MODEL,
   documentContext,
   extractModelText,
+  runXaiChat,
   SYSTEM_PROMPT,
-  WORKERS_AI_MODEL,
+  XAI_CHAT_URL,
+  XAI_MODEL,
+  xaiChatBody,
 } from "./ai.ts";
 export { ConsentHub } from "./hub.ts";
 export { filterRecords, isViewField, sanitizeFields } from "./filter.ts";

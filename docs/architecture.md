@@ -70,9 +70,10 @@ Kullanıcı (evrak yükler / yazar)
         │  POST /api/evrak  ve  POST /api/ai
         ▼
 denk-app  (bizim Cloudflare Worker)
-        │  env.AI.run("@cf/meta/llama-3.1-8b-instruct")
+        │  Grok 4.5
+        │  XAI_API_KEY → api.x.ai  veya  env.AI.run("xai/grok-4.5")
         ▼
-Cloudflare Workers AI  (aynı hesap, binding; API anahtarı koda yazılmaz)
+xAI Grok 4.5  (anahtar secret; koda yazılmaz)
 ```
 
 - Evrak **bizim** Worker’a gelir (kullanıcı yükler).

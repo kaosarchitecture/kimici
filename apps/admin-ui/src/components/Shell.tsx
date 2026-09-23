@@ -30,7 +30,7 @@ export function Shell(props: { page: PageId; children: ReactNode }) {
             <h1>{props.page === "ai" ? "AI" : "Fiş yazdır"}</h1>
             <p className="lede">
               {props.page === "ai"
-                ? "Model: Cloudflare Workers AI, denk-app Worker içinde. Evrak bu sunucuya yüklenir."
+                ? "Model: Grok 4.5, denk-app Worker içinden. Evrak bu sunucuya yüklenir."
                 : "Yalnızca yüklenen evraktan fiş çıkar."}
             </p>
           </div>

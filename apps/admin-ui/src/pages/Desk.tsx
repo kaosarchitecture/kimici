@@ -30,7 +30,7 @@ export function Desk() {
   const [messages, setMessages] = useState<Message[]>([
     {
       who: "ai",
-      text: "DENK AI. Konuşma bizim Cloudflare Worker’da (denk-app) Workers AI modeline gider. Evrakı yükleyin. SQL yazmam; müşteri makinesine bağlanmam.",
+      text: "DENK AI (Grok 4.5). Konuşma denk-app Worker’dan xAI’ye gider. Evrakı yükleyin. SQL yazmam; müşteri makinesine bağlanmam.",
     },
   ]);
 
