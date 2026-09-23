@@ -30,7 +30,7 @@ export function Desk() {
   const [messages, setMessages] = useState<Message[]>([
     {
       who: "ai",
-      text: "DENK AI (Grok 4.5). Konuşma denk-app Worker’dan xAI’ye gider. Evrakı yükleyin. SQL yazmam; müşteri makinesine bağlanmam.",
+      text: "DENK AI (Grok). Konuşma denk-app’den xAI’ye gider; model xai.env içinden seçilir. Evrakı yükleyin. SQL yazmam; müşteri makinesine bağlanmam.",
     },
   ]);
 
