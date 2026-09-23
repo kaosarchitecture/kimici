@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DENK — Windows onayı ile izinli görünüm</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1>DENK — AI izin ister, Windows onaylar, web gösterir</h1>
+    <p>
+      Sunucudaki AI, kullanıcının makinesine bağlanmaz. İzin isteği, zaten bize bağlı ajana gider.
+      Kullanıcı kendi Windows oturumuyla onaylar; ajan yalnız tiklenen alanları iter. Parola sunucuya gelmez.
+    </p>
+  </header>
+  <div class="banner" id="banner">
+    Yön: ajan → bizim sunucu. Bu sayfa akışı gösterir; solda operatör / AI, sağda kullanıcının Windows onayı.
+  </div>
+
+  <div class="grid">
+    <section class="card" aria-labelledby="op-title">
+      <h2 id="op-title">Bizim web arayüzü</h2>
+      <div class="who">Operatör + sunucudaki AI · TenantHub</div>
+      <div class="bubble" id="ai-text">
+        Ağustos alış faturasının plan önizlemesini görmek istiyorum. Bunun için kullanıcının
+        Windows oturumundan izin isteyeceğim.
+      </div>
+      <div>Durum: <span class="status idle" id="op-status">idle</span></div>
+      <p class="meta" id="op-purpose"></p>
+      <div class="actions">
+        <button type="button" id="btn-request">Windows yetkisi iste</button>
+        <button type="button" class="danger" id="btn-revoke" disabled>Görünümü kapat</button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="pc-title">
+      <h2 id="pc-title">Kullanıcının bilgisayarı</h2>
+      <div class="who">Canlıda bu pencere Windows’ta açılır. Burada aynı onay simüle edilir.</div>
+      <div class="win">
+        <strong>Windows oturumu</strong>
+        <div>Hesap: <code>DEMO\Kullanici</code></div>
+        <div>SID: <code>S-1-5-21-DEMO-1001</code></div>
+        <div class="meta">Parola istenmez ve gönderilmez. Kimlik yerelde doğrulanır.</div>
+      </div>
+      <p id="pc-request" class="empty">Henüz izin isteği yok.</p>
+      <form id="field-form" class="fields" hidden></form>
+      <div class="actions">
+        <button type="button" id="btn-grant" disabled>Windows oturumu ile onayla</button>
+        <button type="button" class="secondary" id="btn-deny" disabled>Reddet</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="view" aria-labelledby="view-title">
+    <h2 id="view-title">İzin verilen veri — web arayüzümüzde</h2>
+    <p class="meta" id="view-meta">Onaydan sonra ajanın ittiği satırlar burada görünür. Sunucu makineye gitmedi.</p>
+    <div id="view-body" class="empty">Gösterilecek izinli görünüm yok.</div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>
