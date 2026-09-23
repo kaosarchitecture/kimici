@@ -76,3 +76,4 @@ export interface HubState {
 }
 
 export const TENANT_KEY = "denk-tenant";
+export const OPERATOR_KEY = "denk-operator";

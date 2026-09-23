@@ -19,9 +19,11 @@ export { ConsentHub } from "./hub.ts";
 export { filterRecords, isViewField, sanitizeFields } from "./filter.ts";
 export { attestWindowsIdentity, assertLiveWindowsIdentity } from "./windows.ts";
 export { parseTenantId, tenantFromRequest } from "./tenant.ts";
+export { TenantBook, keysFromRequest, sha256Hex } from "./registry.ts";
 export {
   BOOKS_GONE,
   CORS,
+  isBookPath,
   isControlPlanePath,
   isHubPath,
   json,

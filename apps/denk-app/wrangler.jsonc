@@ -11,11 +11,15 @@
     "run_worker_first": ["/api/*"]
   },
   "durable_objects": {
-    "bindings": [{ "name": "HUB", "class_name": "TenantHub" }]
+    "bindings": [
+      { "name": "HUB", "class_name": "TenantHub" },
+      { "name": "REGISTRY", "class_name": "TenantRegistry" }
+    ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["EvrakStore"] },
-    { "tag": "v2", "deleted_classes": ["EvrakStore"], "new_sqlite_classes": ["TenantHub"] }
+    { "tag": "v2", "deleted_classes": ["EvrakStore"], "new_sqlite_classes": ["TenantHub"] },
+    { "tag": "v3", "new_sqlite_classes": ["TenantRegistry"] }
   ],
   "observability": { "enabled": true }
 }

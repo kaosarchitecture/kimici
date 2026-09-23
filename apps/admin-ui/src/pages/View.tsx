@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
-import { FIELD_LABELS, STATUS_LABELS, TENANT_KEY, VIEW_FIELDS, type HubState, type ViewField } from "./types.ts";
+import {
+  FIELD_LABELS,
+  OPERATOR_KEY,
+  STATUS_LABELS,
+  TENANT_KEY,
+  VIEW_FIELDS,
+  type HubState,
+  type ViewField,
+} from "./types.ts";
 
-function loadTenant(): string {
+function readStore(key: string): string {
   try {
-    return localStorage.getItem(TENANT_KEY) ?? "";
+    return sessionStorage.getItem(key) ?? "";
   } catch {
     return "";
+  }
+}
+
+function writeStore(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* ignore quota */
   }
 }
 
@@ -17,8 +33,9 @@ function pillClass(status: HubState["status"]): string {
 }
 
 export function View() {
-  const [tenantDraft, setTenantDraft] = useState(loadTenant);
-  const [tenant, setTenant] = useState(loadTenant);
+  const [tenant, setTenant] = useState(() => readStore(TENANT_KEY));
+  const [operator, setOperator] = useState(() => readStore(OPERATOR_KEY));
+  const [once, setOnce] = useState<{ tenant: string; enrollCode: string; operatorKey: string } | null>(null);
   const [purpose, setPurpose] = useState("Fiş planı önizlemesi");
   const [fields, setFields] = useState<ViewField[]>([...VIEW_FIELDS]);
   const [state, setState] = useState<HubState | null>(null);
@@ -26,14 +43,12 @@ export function View() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  function applyTenant(): void {
-    const next = tenantDraft.trim().toLowerCase();
-    setTenant(next);
-    try {
-      localStorage.setItem(TENANT_KEY, next);
-    } catch {
-      /* ignore quota */
-    }
+  function headers(): HeadersInit {
+    return {
+      "content-type": "application/json",
+      "X-Denk-Tenant": tenant,
+      "X-Denk-Operator": operator,
+    };
   }
 
   useEffect(() => {
@@ -44,15 +59,13 @@ export function View() {
   }, []);
 
   useEffect(() => {
-    if (!tenant) {
+    if (!tenant || !operator) {
       setState(null);
       return;
     }
     let cancelled = false;
     async function pull(): Promise<void> {
-      const res = await fetch(`/api/state?tenant=${encodeURIComponent(tenant)}`, {
-        headers: { "X-Denk-Tenant": tenant },
-      });
+      const res = await fetch(`/api/state?tenant=${encodeURIComponent(tenant)}`, { headers: headers() });
       const body = (await res.json()) as HubState & { error?: string };
       if (cancelled) return;
       if (!res.ok) {
@@ -69,17 +82,39 @@ export function View() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [tenant]);
+  }, [tenant, operator]);
+
+  async function openOffice(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/tenants", { method: "POST" });
+      const body = (await res.json()) as {
+        tenant?: string;
+        enrollCode?: string;
+        operatorKey?: string;
+        error?: string;
+      };
+      if (!res.ok || !body.tenant || !body.enrollCode || !body.operatorKey) {
+        throw new Error(body.error ?? "Büro açılamadı.");
+      }
+      writeStore(TENANT_KEY, body.tenant);
+      writeStore(OPERATOR_KEY, body.operatorKey);
+      setTenant(body.tenant);
+      setOperator(body.operatorKey);
+      setOnce({ tenant: body.tenant, enrollCode: body.enrollCode, operatorKey: body.operatorKey });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Büro açılamadı.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function post(path: string, body: unknown): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(path, {
-        method: "POST",
-        headers: { "content-type": "application/json", "X-Denk-Tenant": tenant },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(path, { method: "POST", headers: headers(), body: JSON.stringify(body) });
       const next = (await res.json()) as HubState & { error?: string };
       if (!res.ok) throw new Error(next.error ?? "İstek başarısız.");
       setState(next);
@@ -92,33 +127,34 @@ export function View() {
 
   const columns = state?.view?.fieldSet ?? fields;
   const records = state?.view?.records ?? [];
+  const bound = Boolean(tenant && operator);
 
   return (
     <div className="desk-ai">
       <section className="sheet">
-        <h2>İzinli görünüm</h2>
+        <h2>Büro</h2>
         <p className="lede">
-          Evrak bu sunucuya yüklenmez. Windows ajanı onaydan sonra yalnız tiklenen alanları iter.
+          Evrak bu sunucuya yüklenmez. Önce büro açılır; ajan kayıt koduyla cihaz anahtarı alır.
           {packVersion ? ` Bilgi paketi ${packVersion}.` : ""}
         </p>
-        <label className="block" htmlFor="tenant">
-          Kiracı kodu
-        </label>
         <div className="row" style={{ marginTop: 0 }}>
-          <input
-            id="tenant"
-            type="text"
-            value={tenantDraft}
-            autoComplete="off"
-            onChange={(event) => setTenantDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") applyTenant();
-            }}
-          />
-          <button type="button" onClick={applyTenant} disabled={!tenantDraft.trim()}>
-            Bağlan
+          <button type="button" disabled={busy} onClick={() => void openOffice()}>
+            Büro aç
           </button>
         </div>
+        {tenant ? <p className="lede">Kiracı {tenant}</p> : null}
+        {once ? (
+          <div className="winbox">
+            <p>Bu üç değer bir kez. Kaydet. Sayfa yenilenince kayıt kodu tekrar gelmez.</p>
+            <p>Kiracı: {once.tenant}</p>
+            <p>Kayıt kodu: {once.enrollCode}</p>
+            <p>Operatör: {once.operatorKey}</p>
+            <p>Ajan: npm run enroll -- {once.enrollCode}</p>
+          </div>
+        ) : null}
+      </section>
+      <section className="sheet">
+        <h2>İzinli görünüm</h2>
         {state ? (
           <p className="lede">
             <span className={`pill ${pillClass(state.status)}`}>{STATUS_LABELS[state.status]}</span>
@@ -133,7 +169,7 @@ export function View() {
           id="purpose"
           type="text"
           value={purpose}
-          disabled={!tenant || busy}
+          disabled={!bound || busy}
           onChange={(event) => setPurpose(event.target.value)}
         />
         <p className="block" style={{ marginBottom: 0 }}>
@@ -145,7 +181,7 @@ export function View() {
               <input
                 type="checkbox"
                 checked={fields.includes(field)}
-                disabled={!tenant || busy}
+                disabled={!bound || busy}
                 onChange={(event) => {
                   setFields((current) =>
                     event.target.checked ? [...current, field] : current.filter((item) => item !== field),
@@ -159,7 +195,7 @@ export function View() {
         <div className="row">
           <button
             type="button"
-            disabled={!tenant || busy || !purpose.trim() || fields.length === 0}
+            disabled={!bound || busy || !purpose.trim() || fields.length === 0}
             onClick={() => void post("/api/views/request", { purpose, fields })}
           >
             Görünüm iste
@@ -167,7 +203,7 @@ export function View() {
           <button
             type="button"
             className="warn"
-            disabled={!tenant || busy || !state?.grant}
+            disabled={!bound || busy || !state?.grant}
             onClick={() => void post("/api/views/revoke", { grantId: state?.grant?.grantId })}
           >
             Görünümü kapat

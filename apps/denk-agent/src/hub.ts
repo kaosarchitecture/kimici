@@ -9,7 +9,27 @@ export async function pullKnowledge(hubUrl: string): Promise<KnowledgePack> {
   return body.pack;
 }
 
-async function hubJson<T>(hubUrl: string, tenant: string, path: string, init?: RequestInit): Promise<T> {
+export async function enrollDevice(
+  hubUrl: string,
+  enrollCode: string,
+): Promise<{ tenant: string; deviceKey: string }> {
+  const res = await fetch(new URL("/api/enroll", hubUrl), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enrollCode }),
+  });
+  const body = (await res.json()) as { tenant?: string; deviceKey?: string; error?: string };
+  if (!res.ok || !body.tenant || !body.deviceKey) throw new Error(body.error ?? "Kayıt olmadı.");
+  return { tenant: body.tenant, deviceKey: body.deviceKey };
+}
+
+async function hubJson<T>(
+  hubUrl: string,
+  tenant: string,
+  deviceKey: string,
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   const url = new URL(path, hubUrl);
   if (!init?.method || init.method === "GET") url.searchParams.set("tenant", tenant);
   const res = await fetch(url, {
@@ -17,6 +37,7 @@ async function hubJson<T>(hubUrl: string, tenant: string, path: string, init?: R
     headers: {
       "content-type": "application/json",
       "X-Denk-Tenant": tenant,
+      "X-Denk-Device": deviceKey,
       ...(init?.headers ?? {}),
     },
   });
@@ -25,31 +46,36 @@ async function hubJson<T>(hubUrl: string, tenant: string, path: string, init?: R
   return body;
 }
 
-export async function readHubState(hubUrl: string, tenant: string): Promise<HubSnapshot & { tenant: string }> {
-  return hubJson(hubUrl, tenant, "/api/state");
+export async function readHubState(
+  hubUrl: string,
+  tenant: string,
+  deviceKey: string,
+): Promise<HubSnapshot & { tenant: string }> {
+  return hubJson(hubUrl, tenant, deviceKey, "/api/state");
 }
 
 export async function syncPermittedView(input: {
   hubUrl: string;
   tenant: string;
+  deviceKey: string;
   identity: WindowsIdentity;
   records: readonly ViewRecord[];
 }): Promise<"pushed" | "no-request"> {
-  const state = await readHubState(input.hubUrl, input.tenant);
+  const state = await readHubState(input.hubUrl, input.tenant, input.deviceKey);
   if ((state.status !== "pending" && state.status !== "prompted") || !state.request) {
     return "no-request";
   }
   const requestId = state.request.requestId;
-  await hubJson(input.hubUrl, input.tenant, "/api/agent/prompted", {
+  await hubJson(input.hubUrl, input.tenant, input.deviceKey, "/api/agent/prompted", {
     method: "POST",
     body: JSON.stringify({ requestId, identity: input.identity }),
   });
-  const granted = await hubJson<HubSnapshot>(input.hubUrl, input.tenant, "/api/agent/grant", {
+  const granted = await hubJson<HubSnapshot>(input.hubUrl, input.tenant, input.deviceKey, "/api/agent/grant", {
     method: "POST",
     body: JSON.stringify({ requestId, identity: input.identity }),
   });
   if (!granted.grant) throw new Error("Windows onayı kaydedilemedi.");
-  await hubJson(input.hubUrl, input.tenant, "/api/agent/push", {
+  await hubJson(input.hubUrl, input.tenant, input.deviceKey, "/api/agent/push", {
     method: "POST",
     body: JSON.stringify({ grantId: granted.grant.grantId, records: input.records }),
   });

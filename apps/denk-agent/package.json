@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "process": "node --experimental-strip-types src/cli.ts"
+    "process": "node --experimental-strip-types src/cli.ts",
+    "enroll": "node --experimental-strip-types src/cli.ts enroll"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

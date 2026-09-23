@@ -4,10 +4,12 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ConsentHub } from "../src/hub.ts";
 import { CORS, isControlPlanePath, routeControlPlane } from "../src/http.ts";
+import { TenantBook } from "../src/registry.ts";
 
 const uiRoot = fileURLToPath(new URL("../../../apps/admin-ui/dist", import.meta.url));
 const PORT = Number(process.env.PORT ?? 8788);
 const hubs = new Map<string, ConsentHub>();
+const book = new TenantBook();
 
 function hubFor(tenant: string): ConsentHub {
   const existing = hubs.get(tenant);
@@ -72,7 +74,10 @@ const server = createServer(async (req, res) => {
 
     if (isControlPlanePath(url.pathname) || (method === "OPTIONS" && url.pathname.startsWith("/api/"))) {
       const request = await toFetchRequest(req, url);
-      const response = await routeControlPlane(request, async (tenant) => hubFor(tenant));
+      const response = await routeControlPlane(request, {
+        book,
+        resolveHub: async (tenant) => hubFor(tenant),
+      });
       if (response) {
         await writeFetchResponse(res, response);
         return;
@@ -105,5 +110,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`DENK: http://0.0.0.0:${PORT}`);
-  console.log("Evrak yok · bilgi paketi ve kiracı başına izinli görünüm");
+  console.log("Evrak yok · büro kaydı + cihaz anahtarı");
 });
